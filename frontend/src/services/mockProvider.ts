@@ -98,6 +98,8 @@ const SAMPLE_ARCHETYPES = [
     archetype: 'Neo-Streetwear Minimalist',
     score: 95,
     summary: 'A masterclass in proportions. Cropped boxy outerwear paired with relaxed pleated tailoring and understated retro kicks creates an effortless silhouette with high aesthetic harmony.',
+    caption: 'Fit Check Live rating: 95/100 🔥 Neo-Streetwear Minimalist. The drape on the cropped jacket and pleated trousers went crazy on the live stream. Thanks to everyone who tuned in! What do we think of the shoe pairing? 👟✨\n\n#FitCheck #DevFest2026 #OOTD #Streetwear #MinimalStyle',
+    likesCount: 1842,
     garments: [
       {
         category: 'Outerwear' as const,
@@ -105,6 +107,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Washed Olive / Sage',
         confidence: 0.98,
         highlight: 'Immaculate cropped drape',
+        tagXPercent: 50,
+        tagYPercent: 35,
       },
       {
         category: 'Tops' as const,
@@ -112,6 +116,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Off-White / Cream',
         confidence: 0.94,
         highlight: 'Heavyweight collar structure',
+        tagXPercent: 48,
+        tagYPercent: 44,
       },
       {
         category: 'Bottoms' as const,
@@ -119,6 +125,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Deep Charcoal / Slate',
         confidence: 0.97,
         highlight: 'Perfect shoe break',
+        tagXPercent: 52,
+        tagYPercent: 65,
       },
       {
         category: 'Footwear' as const,
@@ -126,6 +134,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Chalk White / Gum Sole',
         confidence: 0.93,
         highlight: 'Classic silhouette',
+        tagXPercent: 48,
+        tagYPercent: 92,
       },
       {
         category: 'Accessories' as const,
@@ -133,6 +143,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Brushed Silver',
         confidence: 0.89,
         highlight: 'Subtle metal accent',
+        tagXPercent: 62,
+        tagYPercent: 30,
       },
     ],
   },
@@ -140,6 +152,8 @@ const SAMPLE_ARCHETYPES = [
     archetype: 'Modern Japanese Utility',
     score: 93,
     summary: 'Functional elegance meets contemporary street tailoring. Earthy olive and stone tones balanced with tactical detailing and clean footwear.',
+    caption: 'Live fit check scored 93/100 🏆 Modern Japanese Utility. Earthy tones, tactical detailing, and heavy silhouette flow. Live chat demanded this get posted immediately!\n\n#DevFest2026 #FitCheck #Gorpcore #JapaneseStreetwear #MensFashion',
+    likesCount: 2190,
     garments: [
       {
         category: 'Outerwear' as const,
@@ -147,6 +161,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Slate Charcoal',
         confidence: 0.96,
         highlight: 'Subtle matte sheen',
+        tagXPercent: 50,
+        tagYPercent: 35,
       },
       {
         category: 'Tops' as const,
@@ -154,6 +170,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Oatmeal',
         confidence: 0.91,
         highlight: 'Textural depth',
+        tagXPercent: 48,
+        tagYPercent: 45,
       },
       {
         category: 'Bottoms' as const,
@@ -161,6 +179,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Army Olive',
         confidence: 0.95,
         highlight: 'Structured volume',
+        tagXPercent: 52,
+        tagYPercent: 68,
       },
       {
         category: 'Footwear' as const,
@@ -168,6 +188,8 @@ const SAMPLE_ARCHETYPES = [
         color: 'Triple Black',
         confidence: 0.92,
         highlight: 'Rugged aesthetic',
+        tagXPercent: 50,
+        tagYPercent: 92,
       },
     ],
   },
@@ -267,9 +289,9 @@ export class MockFitCheckProvider implements FitCheckProvider {
     return userComment;
   }
 
-  public async analyzeFit(snapshotBase64?: string): Promise<FitResult> {
-    // Simulate Gemini Vision processing latency (1.8 - 2.2 seconds)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  public async analyzeFit(capturedPhotos?: string[]): Promise<FitResult> {
+    // Simulate Gemini Vision processing latency (1.8 - 2.0 seconds)
+    await new Promise((resolve) => setTimeout(resolve, 1800));
 
     const selectedArchetype = SAMPLE_ARCHETYPES[Math.floor(Math.random() * SAMPLE_ARCHETYPES.length)];
 
@@ -277,25 +299,40 @@ export class MockFitCheckProvider implements FitCheckProvider {
       overallScore: selectedArchetype.score,
       archetype: selectedArchetype.archetype,
       summary: selectedArchetype.summary,
+      caption: selectedArchetype.caption,
+      likesCount: selectedArchetype.likesCount,
       garments: selectedArchetype.garments,
       topComments: [
         {
+          id: 'tc_1',
           username: 'mia.styles',
           comment: 'The jacket drape is absolute perfection on the turn! 🤌',
           avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+          badge: 'Stylist',
+          timeAgo: '2m',
+          likes: 47,
         },
         {
+          id: 'tc_2',
           username: 'hypebeast_marcus',
           comment: 'Pants break over the kicks is 10/10 no notes 🔥',
           avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&auto=format&fit=crop&q=80',
+          badge: 'Verified',
+          timeAgo: '1m',
+          likes: 35,
         },
         {
+          id: 'tc_3',
           username: 'sara_vogue',
           comment: 'Subtle earth tone harmony, very high taste level ✨',
           avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&auto=format&fit=crop&q=80',
+          badge: 'Trendsetter',
+          timeAgo: '1m',
+          likes: 19,
         },
       ],
-      capturedSnapshotUrl: snapshotBase64,
+      capturedPhotos: capturedPhotos && capturedPhotos.length > 0 ? capturedPhotos : [],
+      capturedSnapshotUrl: capturedPhotos && capturedPhotos.length > 0 ? capturedPhotos[0] : undefined,
       timestamp: Date.now(),
     };
   }

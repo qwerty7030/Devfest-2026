@@ -15,7 +15,8 @@ import { LiveChat } from './components/LiveOverlay/LiveChat';
 import { FloatingReactions } from './components/LiveOverlay/FloatingReactions';
 import { ReactionBar } from './components/LiveOverlay/ReactionBar';
 import { ScannerOverlay } from './components/Analyzing/ScannerOverlay';
-import { ResultsCard } from './components/Results/ResultsCard';
+import { PosingScreen } from './components/Posing/PosingScreen';
+import { InstagramPostCard } from './components/InstagramPost/InstagramPostCard';
 
 import {
   Camera,
@@ -36,6 +37,7 @@ export function App() {
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [fitResult, setFitResult] = useState<FitResult | null>(null);
   const [capturedSnapshot, setCapturedSnapshot] = useState<string | undefined>(undefined);
+  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
   const [showGuide, setShowGuide] = useState<boolean>(true);
 
   // Camera hook
@@ -80,6 +82,7 @@ export function App() {
   // Transition: READY -> COUNTDOWN
   const handleStartFitCheck = () => {
     clearLiveState();
+    setCapturedPhotos([]);
     setAppState('COUNTDOWN');
   };
 
@@ -107,7 +110,7 @@ export function App() {
       setElapsedSec(elapsed);
       setRemainingSec(remaining);
 
-      // Take a snapshot around 13-14 seconds
+      // Take a background snapshot around 13-14 seconds for scanning
       if (remaining === 1) {
         const snap = captureSnapshot();
         if (snap) setCapturedSnapshot(snap);
@@ -143,28 +146,33 @@ export function App() {
     triggerReaction,
   ]);
 
-  // Transition: Trigger Analysis
+  // Transition: ANALYZING -> POSING (after 2s scanning)
   useEffect(() => {
     if (appState === 'ANALYZING') {
-      let isSubscribed = true;
-
-      mockFitCheckProvider
-        .analyzeFit(capturedSnapshot)
-        .then((result) => {
-          if (isSubscribed) {
-            setFitResult(result);
-            setAppState('RESULTS');
-          }
-        })
-        .catch((err) => {
-          console.error('Fit analysis error:', err);
-        });
+      const timer = window.setTimeout(() => {
+        // Transition to POSING photoshoot
+        setAppState('POSING');
+      }, 2100);
 
       return () => {
-        isSubscribed = false;
+        window.clearTimeout(timer);
       };
     }
-  }, [appState, capturedSnapshot]);
+  }, [appState]);
+
+  // Transition: POSING -> RESULTS (User finishes taking 1-2 photos)
+  const handleFinishPosing = async (photos: string[]) => {
+    setCapturedPhotos(photos);
+    setAppState('ANALYZING'); // Brief loading spinner / synthesis
+
+    try {
+      const result = await mockFitCheckProvider.analyzeFit(photos);
+      setFitResult(result);
+      setAppState('RESULTS');
+    } catch (err) {
+      console.error('Fit analysis error:', err);
+    }
+  };
 
   // Stop / Cancel active recording
   const handleStopRecording = () => {
@@ -183,15 +191,14 @@ export function App() {
     clearLiveState();
     setFitResult(null);
     setCapturedSnapshot(undefined);
+    setCapturedPhotos([]);
     setAppState('READY');
   };
 
-  // Quick Retake (Countdown directly)
-  const handleQuickRetake = () => {
-    clearLiveState();
-    setFitResult(null);
-    setCapturedSnapshot(undefined);
-    setAppState('COUNTDOWN');
+  // Retake Photos (returns to Posing screen)
+  const handleRetakePhotos = () => {
+    setCapturedPhotos([]);
+    setAppState('POSING');
   };
 
   // User comments from reaction bar
@@ -208,7 +215,7 @@ export function App() {
   return (
     <PhoneFrame>
       <div className="relative w-full h-full flex flex-col justify-between overflow-hidden bg-black">
-        {/* Base Layer: Mirrored Video Feed */}
+        {/* Base Layer: Mirrored Video Feed (visible in READY, COUNTDOWN, RECORDING, POSING) */}
         <CameraPreview
           videoRef={videoRef}
           isMirrored={isMirrored}
@@ -287,7 +294,7 @@ export function App() {
               {/* Cue text */}
               <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium">
                 <Sliders className="w-3.5 h-3.5 text-pink-400" />
-                <span>15s Live Audience Fit Reaction</span>
+                <span>15s Live Stream ➔ Photoshoot ➔ IG Post</span>
                 <button
                   onClick={() => setShowGuide((prev) => !prev)}
                   className="underline hover:text-white ml-1 text-[11px]"
@@ -308,7 +315,7 @@ export function App() {
               </button>
 
               <p className="text-[11px] text-zinc-500 text-center max-w-xs">
-                Walk into frame, do a 360° turn, and show off your kicks. Gemini Vision will rate your drip.
+                Walk into frame, 360° turn, strike 1–2 poses for your post, and get your drip rated with top crowd comments.
               </p>
             </div>
           </>
@@ -322,7 +329,6 @@ export function App() {
         {/* RECORDING STATE (INSTAGRAM LIVE OVERLAY) */}
         {appState === 'RECORDING' && (
           <>
-            {/* Top Bar with LIVE pill, Viewers, Timer and Controls */}
             <LiveHeader
               viewerCount={viewerCount}
               remainingSeconds={remainingSec}
@@ -332,19 +338,13 @@ export function App() {
               onStop={handleStopRecording}
             />
 
-            {/* Coaching Guidance Banner */}
             <CoachingCue
               elapsedSeconds={elapsedSec}
               totalDurationSeconds={RECORDING_DURATION}
             />
 
-            {/* Scrolling Instagram Chat Stream */}
             <LiveChat comments={comments} />
-
-            {/* Floating Reactions Rising Up */}
             <FloatingReactions reactions={reactions} />
-
-            {/* Bottom Reaction and Comment Input Bar */}
             <ReactionBar
               onSendComment={handleUserSendComment}
               onSendReaction={handleUserSendReaction}
@@ -352,17 +352,26 @@ export function App() {
           </>
         )}
 
-        {/* ANALYZING STATE */}
+        {/* ANALYZING STATE (SCANNER) */}
         {appState === 'ANALYZING' && (
-          <ScannerOverlay snapshotUrl={capturedSnapshot} />
+          <ScannerOverlay snapshotUrl={capturedSnapshot || capturedPhotos[0]} />
         )}
 
-        {/* RESULTS STATE */}
+        {/* POSING PHOTOSHOOT STATE (1-2 PHOTOS FOR POST) */}
+        {appState === 'POSING' && (
+          <PosingScreen
+            onCapturePhoto={captureSnapshot}
+            onFinishPosing={handleFinishPosing}
+            onCancel={handleResetToReady}
+          />
+        )}
+
+        {/* RESULTS STATE (INSTAGRAM POST WITH TOP COMMENTS) */}
         {appState === 'RESULTS' && fitResult && (
-          <ResultsCard
+          <InstagramPostCard
             result={fitResult}
             onReset={handleResetToReady}
-            onRetake={handleQuickRetake}
+            onRetake={handleRetakePhotos}
           />
         )}
       </div>

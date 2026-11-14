@@ -1,4 +1,4 @@
-export type AppState = 'READY' | 'COUNTDOWN' | 'RECORDING' | 'ANALYZING' | 'RESULTS';
+export type AppState = 'READY' | 'COUNTDOWN' | 'RECORDING' | 'ANALYZING' | 'POSING' | 'RESULTS';
 
 export interface LiveComment {
   id: string;
@@ -25,18 +25,27 @@ export interface GarmentItem {
   color: string;
   confidence: number;
   highlight?: string;
+  tagXPercent?: number; // Placement percentage for interactive outfit tags on photo
+  tagYPercent?: number;
 }
 
 export interface FitResult {
   overallScore: number;
   archetype: string;
   summary: string;
+  caption: string;
+  likesCount: number;
   garments: GarmentItem[];
   topComments: {
+    id: string;
     username: string;
     comment: string;
-    avatarUrl?: string;
+    avatarUrl: string;
+    badge?: string;
+    timeAgo: string;
+    likes: number;
   }[];
+  capturedPhotos: string[];
   capturedSnapshotUrl?: string;
   timestamp: number;
 }

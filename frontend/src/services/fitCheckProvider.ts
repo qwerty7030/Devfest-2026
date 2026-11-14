@@ -20,7 +20,7 @@ export interface FitCheckProvider {
   sendUserComment(commentText: string): LiveComment;
 
   /**
-   * Finalizes analysis and returns structured fit review (Gemini + LLM response)
+   * Finalizes analysis and returns structured fit review with Instagram post content
    */
-  analyzeFit(snapshotBase64?: string): Promise<FitResult>;
+  analyzeFit(capturedPhotos?: string[]): Promise<FitResult>;
 }
