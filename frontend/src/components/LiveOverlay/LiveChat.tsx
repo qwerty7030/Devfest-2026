@@ -14,7 +14,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ comments }) => {
   }, [comments]);
 
   return (
-    <div role="log" aria-label="Live audience comments" aria-live="polite" aria-relevant="additions" className="absolute bottom-20 left-0 right-16 z-20 max-h-[45vh] overflow-y-auto no-scrollbar pointer-events-auto px-4 pb-2">
+    <div role="log" aria-label="Live audience comments" aria-live="polite" aria-relevant="additions" className="absolute bottom-20 left-0 right-16 z-20 max-h-[38%] overflow-y-auto no-scrollbar pointer-events-auto px-4 pb-2">
       {/* Soft gradient mask overlay */}
       <div className="flex flex-col gap-2">
         {comments.map((item) => (
@@ -50,6 +50,10 @@ export const LiveChat: React.FC<LiveChatProps> = ({ comments }) => {
                         ? 'bg-purple-500/90 text-white'
                         : item.badge === 'Verified'
                         ? 'bg-sky-500/90 text-white'
+                        : item.feedbackType === 'suggestion'
+                        ? 'bg-amber-200 text-amber-950'
+                        : item.feedbackType === 'compliment'
+                        ? 'bg-lime-200 text-lime-950'
                         : 'bg-pink-500/90 text-white'
                     }`}
                   >
@@ -67,6 +71,8 @@ export const LiveChat: React.FC<LiveChatProps> = ({ comments }) => {
               <p className="text-white text-xs sm:text-[13px] leading-snug drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] font-normal break-words mt-0.5">
                 {item.comment}
               </p>
+              {item.suggestion && <p className="text-amber-100 text-xs leading-snug mt-1"><strong>Try:</strong> {item.suggestion}</p>}
+              {item.tag && <span className="text-[9px] text-zinc-300 mt-1">Seen: {item.tag}</span>}
             </div>
           </div>
         ))}

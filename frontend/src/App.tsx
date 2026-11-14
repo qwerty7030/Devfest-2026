@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, FlipHorizontal, Volume2, VolumeX, RefreshCw, ArrowUpRight, Sparkles, X } from 'lucide-react';
 import type { AppState, FitResult } from './types/fitCheck';
+import type { OutfitObservation } from '../../lib/fitcheck/types';
 import { useCamera } from './hooks/useCamera';
 import { useLiveReactions } from './hooks/useLiveReactions';
 import { usePersonDetector } from '../../lib/fitcheck/usePersonDetector';
@@ -36,6 +37,7 @@ export function App() {
   const [status, setStatus] = useState('Connecting your AI audience…');
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [observations, setObservations] = useState<OutfitObservation[]>([]);
   const camera = useCamera();
   const { stopCamera } = camera;
   const live = useLiveReactions();
@@ -61,12 +63,21 @@ export function App() {
     setElapsed(0);
     startViewerCounter();
     setStatus(demo ? 'Demo audience · sample reactions' : 'Connecting your AI audience…');
+    let outfitVisible = demo;
+    let visibleMs = 0;
+    let lastTick = Date.now();
     let stop: () => void;
     if (demo) { mockFitCheckProvider.startLiveFeed(addComment, triggerReaction); stop = () => mockFitCheckProvider.stopLiveFeed(); }
-    else stop = startLiveFeed(capture, addComment, setStatus);
-    const started = Date.now();
+    else stop = startLiveFeed(capture, addComment, setStatus, items => {
+      setObservations(items);
+      outfitVisible = items.length > 0;
+      lastTick = Date.now();
+    });
     const timer = setInterval(() => {
-      const seconds = Math.min(DURATION, Math.floor((Date.now() - started) / 1000));
+      const now = Date.now();
+      if (outfitVisible) visibleMs += now - lastTick;
+      lastTick = now;
+      const seconds = Math.min(DURATION, Math.floor(visibleMs / 1000));
       setElapsed(seconds);
       if (seconds >= DURATION) {
         const photo = capture();
@@ -122,7 +133,9 @@ export function App() {
     </>}
     {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
     {stage === 'RECORDING' && <><LiveHeader viewerCount={live.viewerCount} remainingSeconds={DURATION-elapsed} totalDurationSeconds={DURATION} isMuted={muted} onToggleMute={() => setMuted(v=>!v)} onStop={reset}/>
-      <div className="audience-status" role="status">{status}</div><CoachingCue elapsedSeconds={elapsed} totalDurationSeconds={DURATION}/><LiveChat comments={live.comments}/><FloatingReactions reactions={live.reactions}/>
+      <div className="audience-status" role="status">{status}</div><CoachingCue elapsedSeconds={elapsed} totalDurationSeconds={DURATION}/>
+      {!demo && <div className="outfit-observations" aria-label="Clothing detected by Gemini">{observations.length ? <><span>GEMINI SEES</span>{observations.map(item => <span key={item.id}>{item.description}</span>)}</> : <p>Stand in front of the camera. Feedback appears after Gemini can see what you’re wearing.</p>}</div>}
+      <LiveChat comments={demo || observations.length > 0 ? live.comments : []}/><FloatingReactions reactions={live.reactions}/>
       <ReactionBar onSendComment={text => addComment({ id: crypto.randomUUID(), username: 'you', avatarUrl: '/avatar.svg', comment: text, timestamp: Date.now(), badge: 'Host' })} onSendReaction={triggerReaction}/></>}
     {stage === 'POSING' && <PosingScreen onCapturePhoto={capture} onFinishPosing={finish} onCancel={reset}/>}
     {stage === 'ANALYZING' && <><ScannerOverlay snapshotUrl={snapshot} isDemo={demo}/>{error ? <div className="analysis-error" role="alert"><span className="eyebrow">LET’S TRY THAT AGAIN</span><h2>A small style pause.</h2><p>{error}</p><button className="primary-action" onClick={() => { analysisRef.current?.abort(); void finish(photos); }}>Retry analysis <RefreshCw size={17}/></button><button className="demo-action" onClick={() => { setError(null); setStage('POSING'); }}>Retake photos</button><button className="demo-action" onClick={reset}>Back to studio</button></div> : <button className="cancel-session" onClick={reset} aria-label="Cancel analysis"><X size={18}/></button>}</>}

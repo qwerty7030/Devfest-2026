@@ -56,6 +56,10 @@
 .framing-status>span { width:5px; height:5px; background:#d3f98a; border-radius:50%; }
 .service-note { color:#ddca9f; font-size:10px; text-align:center; margin-bottom:13px; line-height:1.6; }
 .audience-status { position:absolute; top:72px; left:0; right:0; z-index:25; text-align:center; color:#e5eddf; font-size:9px; background:#1117; padding:7px; }
+.outfit-observations { position:absolute; top:172px; left:16px; right:16px; z-index:20; display:flex; flex-wrap:wrap; gap:5px; pointer-events:none; }
+.outfit-observations>span { background:#10150fde; border:1px solid #d3f98a44; color:#e0edcf; border-radius:6px; padding:5px 8px; font-size:9px; max-width:100%; }
+.outfit-observations>span:first-child { width:100%; background:transparent; border:0; color:#d3f98a; font-size:8px; letter-spacing:1.5px; padding:0 0 4px; }
+.outfit-observations>p { background:#101510d9; border:1px solid #ffffff22; color:#d6dbcf; padding:14px; border-radius:10px; font-size:12px; line-height:1.6; }
 .cancel-session { position:absolute; top:16px; right:16px; z-index:40; background:#1e211ee0; border:1px solid #ffffff30; color:white; border-radius:50%; width:34px; height:34px; display:grid; place-items:center; }
 .analysis-error { position:absolute; inset:0; z-index:40; background:#141615f5; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px; text-align:center; }
 .analysis-error h2 { font-size:29px; letter-spacing:-1px; margin:20px 0 5px; }.analysis-error p { font-size:13px; color:#aaa; line-height:1.7; margin-bottom:24px; }

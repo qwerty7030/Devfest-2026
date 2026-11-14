@@ -9,6 +9,8 @@ export interface LiveComment {
   badge?: string; // e.g. "VIP", "Stylist", "Verified"
   tag?: string;   // e.g. "Footwear", "Jacket", "Vibe"
   isHighlighted?: boolean;
+  feedbackType?: 'compliment' | 'suggestion';
+  suggestion?: string;
 }
 
 export interface FloatingReaction {

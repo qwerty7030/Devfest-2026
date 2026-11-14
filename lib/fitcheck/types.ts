@@ -2,13 +2,13 @@ import type { RefObject } from "react";
 
 /**
  * EMPTY   – nobody in frame
- * ENTERED – person just detected; local hype is showing, first AI call in flight
+ * ENTERED – person just detected; first AI observation call is in flight
  * LIVE    – AI comments are flowing
  * LEFT    – person walked out; `lastResult` holds the final rating for the end card
  */
 export type LiveState = "EMPTY" | "ENTERED" | "LIVE" | "LEFT";
 
-export type Tone = "hype" | "roast" | "question" | "emoji";
+export type Tone = "hype" | "critique" | "roast" | "question" | "emoji";
 
 export interface LiveComment {
   id: string;
@@ -57,7 +57,21 @@ export interface CommentsRequest {
 
 export interface CommentsResponse {
   person_visible: boolean;
+  observations: OutfitObservation[];
   vibe?: string;
   rating?: number;
-  comments: { text: string; tone: Tone }[];
+  comments: OutfitComment[];
+}
+
+export interface OutfitObservation {
+  id: string;
+  category: string;
+  description: string;
+}
+
+export interface OutfitComment {
+  text: string;
+  tone: "hype" | "critique";
+  evidenceIds: string[];
+  suggestion: string;
 }

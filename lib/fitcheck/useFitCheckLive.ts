@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { captureFrame } from "./captureFrame";
 import { CommentQueue } from "./commentQueue";
-import { ENTERED_LINES, FILLER_LINES, IDLE_LINES, sample } from "./localComments";
 import type { CommentsResponse, FitCheckLive, FitResult, LiveComment, LiveState } from "./types";
 import { useCamera } from "./useCamera";
 import { usePersonDetector } from "./usePersonDetector";
@@ -12,7 +11,6 @@ const MAX_COMMENTS = 30;
 const REFETCH_WHEN_QUEUE_BELOW = 5;
 const MIN_FETCH_GAP_MS = 3000;
 const LEFT_HOLD_MS = 5000;
-const FILLER_GAP_MS = 1500;
 const RECENT_FOR_PROMPT = 15;
 
 interface Options {
@@ -37,7 +35,6 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   const queueRef = useRef<CommentQueue | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   const lastFetchRef = useRef(0);
-  const lastFillerRef = useRef(0);
   const recentAiRef = useRef<string[]>([]);
   const leftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -103,10 +100,6 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     if (present && (s === "EMPTY" || s === "LEFT")) {
       if (leftTimerRef.current) clearTimeout(leftTimerRef.current);
       queueRef.current?.clear();
-      queueRef.current?.push(
-        sample(ENTERED_LINES, 3).map((l) => ({ ...l, source: "local" as const })),
-        { front: true },
-      );
       recentAiRef.current = [];
       setLastResult(null);
       goTo("ENTERED");
@@ -121,7 +114,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     }
   }, [present, goTo, fetchBatch]);
 
-  // ---- heartbeat: refetch, filler, idle chatter, viewer count ----
+  // ---- heartbeat: refetch outfit feedback and update simulated viewer count ----
   useEffect(() => {
     let tick = 0;
     const id = setInterval(() => {
@@ -134,13 +127,6 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
         if (q.size < REFETCH_WHEN_QUEUE_BELOW && now - lastFetchRef.current > MIN_FETCH_GAP_MS) {
           void fetchBatch();
         }
-        // Never let the chat go silent while waiting on (or failing to reach) Gemini.
-        if (q.size === 0 && now - lastFillerRef.current > FILLER_GAP_MS) {
-          lastFillerRef.current = now;
-          q.push(sample(FILLER_LINES, 1).map((l) => ({ ...l, source: "local" as const })));
-        }
-      } else if (s === "EMPTY" && q && Math.random() < 0.06) {
-        q.push(sample(IDLE_LINES, 1).map((l) => ({ ...l, source: "local" as const })));
       }
 
       if (tick % 2 === 0) {
