@@ -9,3 +9,17 @@ This directory is reserved for the backend team working on **Fit Check**.
 4. Return structured fit check results and audience sentiment to the frontend.
 
 For the exact request and response schemas, see [API_CONTRACT.md](./API_CONTRACT.md).
+
+## Where the backend lives
+
+The backend is the **Next.js app at the repo root**, not this folder:
+
+| Endpoint | File |
+|---|---|
+| `POST /api/comments` (live comments) | [app/api/comments/route.ts](../app/api/comments/route.ts) |
+| `POST /api/analyze` (results card) | [app/api/analyze/route.ts](../app/api/analyze/route.ts) |
+| Shared Gemini client, model, thinking config | [lib/fitcheck/gemini.ts](../lib/fitcheck/gemini.ts) |
+| Comment prompt + few-shot loading from `data/` | [lib/fitcheck/prompt.ts](../lib/fitcheck/prompt.ts) |
+
+Backend test page: `http://localhost:3000/debug`. Model tools: `node scripts/list-models.mjs` (what your key can use)
+and `node scripts/bench-models.mjs frame.jpg` (latency).

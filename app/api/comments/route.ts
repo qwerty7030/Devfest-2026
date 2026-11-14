@@ -1,34 +1,15 @@
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { clampStr, generateWithFallback, normalizeFrame, QuotaExhausted, shortError, thinkingConfig } from "@/lib/fitcheck/gemini";
 import { SYSTEM_PROMPT } from "@/lib/fitcheck/prompt";
-import type { CommentsRequest, CommentsResponse, Tone } from "@/lib/fitcheck/types";
+import type { CommentsRequest, CommentsResponse, CommentTag, Tone } from "@/lib/fitcheck/types";
 
 export const runtime = "nodejs";
 
-// Benchmarked 2026-11-14: 3.5-flash-lite ~1s and reliable; 3.5-flash ~9s;
-// 3.8-flash timed out / 503s. Re-run scripts/bench-models.mjs to re-check.
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-// GEMINI_THINKING: minimal | low | medium | high | off. Lower = faster. Not every
-// model supports every level (gemini-3.8-flash rejects "minimal"); "off" omits
-// the setting entirely and lets the model use its default.
-const THINKING_LEVELS: Record<string, ThinkingLevel> = {
-  minimal: ThinkingLevel.MINIMAL,
-  low: ThinkingLevel.LOW,
-  medium: ThinkingLevel.MEDIUM,
-  high: ThinkingLevel.HIGH,
-};
-const THINKING = THINKING_LEVELS[(process.env.GEMINI_THINKING ?? "low").toLowerCase()];
 const TIMEOUT_MS = 8000;
-const MAX_FRAME_CHARS = 2_000_000; // ~1.5MB JPEG, way more than a 512px frame needs
 const TONES: readonly Tone[] = ["hype", "roast", "question", "emoji"];
+const TAGS: readonly CommentTag[] = ["Outerwear", "Tops", "Bottoms", "Footwear", "Accessories", "Vibe"];
 
 const EMPTY: CommentsResponse = { person_visible: false, comments: [] };
-
-let ai: GoogleGenAI | null = null;
-function client() {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not set (add it to .env.local)");
-  ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return ai;
-}
 
 const responseSchema = {
   type: Type.OBJECT,
@@ -43,6 +24,7 @@ const responseSchema = {
         properties: {
           text: { type: Type.STRING },
           tone: { type: Type.STRING, enum: [...TONES] },
+          tag: { type: Type.STRING, enum: [...TAGS] },
         },
         required: ["text", "tone"],
       },
@@ -54,11 +36,12 @@ const responseSchema = {
 function parseBody(body: unknown): CommentsRequest | null {
   if (!body || typeof body !== "object") return null;
   const { frame, recent } = body as Record<string, unknown>;
-  if (typeof frame !== "string" || frame.length === 0 || frame.length > MAX_FRAME_CHARS) return null;
+  const b64 = normalizeFrame(frame);
+  if (!b64) return null;
   const recentList = Array.isArray(recent)
     ? recent.filter((r): r is string => typeof r === "string").slice(-20).map((r) => r.slice(0, 200))
     : [];
-  return { frame, recent: recentList };
+  return { frame: b64, recent: recentList };
 }
 
 /** Never trust model output blindly: clamp and filter before it reaches the UI. */
@@ -69,12 +52,12 @@ function sanitize(raw: unknown): CommentsResponse {
     ? o.comments
         .map((c) => {
           const cc = (c ?? {}) as Record<string, unknown>;
-          const text = typeof cc.text === "string" ? cc.text.trim().slice(0, 150) : "";
           const tone = TONES.includes(cc.tone as Tone) ? (cc.tone as Tone) : "hype";
-          return { text, tone };
+          const tag = TAGS.includes(cc.tag as CommentTag) ? (cc.tag as CommentTag) : undefined;
+          return { text: clampStr(cc.text, 150), tone, ...(tag ? { tag } : {}) };
         })
         .filter((c) => c.text.length > 0)
-        .slice(0, 12)
+        .slice(0, 15)
     : [];
   const rating = typeof o.rating === "number" && Number.isFinite(o.rating)
     ? Math.round(Math.min(10, Math.max(0, o.rating)) * 10) / 10
@@ -93,8 +76,7 @@ export async function POST(req: Request) {
 
   const started = Date.now();
   try {
-    const res = await client().models.generateContent({
-      model: MODEL,
+    const { res, model } = await generateWithFallback({
       contents: [
         {
           role: "user",
@@ -114,16 +96,17 @@ export async function POST(req: Request) {
         responseSchema,
         temperature: 1.0,
         abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-        ...(THINKING ? { thinkingConfig: { thinkingLevel: THINKING } } : {}),
+        ...thinkingConfig,
       },
     });
 
     const out = sanitize(JSON.parse(res.text ?? "{}"));
-    console.log(`[api/comments] ${MODEL} ${Date.now() - started}ms visible=${out.person_visible} n=${out.comments.length} rating=${out.rating ?? "-"}`);
+    console.log(`[api/comments] ${model} ${Date.now() - started}ms visible=${out.person_visible} n=${out.comments.length} rating=${out.rating ?? "-"}`);
     return Response.json(out);
   } catch (e) {
     // Rate limits, safety blocks, timeouts, bad JSON: the client falls back to local filler.
-    console.warn(`[api/comments] failed after ${Date.now() - started}ms:`, e instanceof Error ? e.message : e);
+    console.warn(`[api/comments] failed after ${Date.now() - started}ms: ${shortError(e)}`);
+    if (e instanceof QuotaExhausted) return Response.json({ ...EMPTY, retryAfterMs: e.retryAfterMs });
     return Response.json(EMPTY);
   }
 }

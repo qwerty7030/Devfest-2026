@@ -55,7 +55,7 @@ function buildSystemPrompt(): string {
 
 Each time you get a webcam frame:
 - Set person_visible to true only if a person and at least part of their outfit are clearly visible. If not, return person_visible false and an empty comments list.
-- Write 8 to 12 comments. Each one is from a different viewer.
+- Write 12 to 15 comments. Each one is from a different viewer.
 - Sound like real commenters: mostly lowercase, slang, emojis, 2 to 12 words, typos are fine.
 - Most comments should name something specific you can actually see: a color, a garment, shoes, layering, accessories, fabric, how pieces go together. Don't invent items that aren't visible.
 - Mix of tones: about 60% hype, 25% playful roast (teasing about the clothes, never mean), 15% questions (like "where's the jacket from??"). An occasional emoji-only comment is fine.

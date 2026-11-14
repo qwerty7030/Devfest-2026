@@ -3,8 +3,11 @@ import { Eye, Volume2, VolumeX, X } from 'lucide-react';
 
 interface LiveHeaderProps {
   viewerCount: number;
-  remainingSeconds: number;
-  totalDurationSeconds: number;
+  /** Countdown mode: pass both to show "Ns" remaining and a progress bar. */
+  remainingSeconds?: number;
+  totalDurationSeconds?: number;
+  /** Continuous mode: time on stream, shown as m:ss. Ignored if remainingSeconds is set. */
+  elapsedSeconds?: number;
   isMuted: boolean;
   onToggleMute: () => void;
   onStop: () => void;
@@ -14,11 +17,18 @@ export const LiveHeader: React.FC<LiveHeaderProps> = ({
   viewerCount,
   remainingSeconds,
   totalDurationSeconds,
+  elapsedSeconds,
   isMuted,
   onToggleMute,
   onStop,
 }) => {
-  const progressPercent = ((totalDurationSeconds - remainingSeconds) / totalDurationSeconds) * 100;
+  const hasCountdown = remainingSeconds !== undefined && !!totalDurationSeconds;
+  const progressPercent = hasCountdown ? ((totalDurationSeconds - remainingSeconds) / totalDurationSeconds) * 100 : 0;
+  const timerLabel = hasCountdown
+    ? `${remainingSeconds}s`
+    : elapsedSeconds !== undefined
+      ? `${Math.floor(elapsedSeconds / 60)}:${String(Math.floor(elapsedSeconds % 60)).padStart(2, '0')}`
+      : null;
 
   // Format viewer count with "k" for numbers over 1000
   const formattedViewers =
@@ -47,11 +57,13 @@ export const LiveHeader: React.FC<LiveHeaderProps> = ({
 
         {/* Right: Timer pill, Sound, and Cancel */}
         <div className="flex items-center gap-2">
-          {/* Remaining Seconds Timer */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-white text-xs font-mono font-bold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>{remainingSeconds}s</span>
-          </div>
+          {/* Timer: seconds remaining (countdown) or time on stream (continuous) */}
+          {timerLabel && (
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-white text-xs font-mono font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span>{timerLabel}</span>
+            </div>
+          )}
 
           {/* Sound Mute Toggle */}
           <button
@@ -73,13 +85,15 @@ export const LiveHeader: React.FC<LiveHeaderProps> = ({
         </div>
       </div>
 
-      {/* Progress Line */}
-      <div className="w-full bg-white/20 h-1 rounded-full overflow-hidden mt-1">
-        <div
-          className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-amber-400 transition-all duration-300 ease-linear"
-          style={{ width: `${progressPercent}%` }}
-        />
-      </div>
+      {/* Progress Line (countdown mode only) */}
+      {hasCountdown && (
+        <div className="w-full bg-white/20 h-1 rounded-full overflow-hidden mt-1">
+          <div
+            className="h-full bg-gradient-to-r from-pink-500 via-purple-500 to-amber-400 transition-all duration-300 ease-linear"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 };

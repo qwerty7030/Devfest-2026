@@ -14,6 +14,10 @@ const MIN_FETCH_GAP_MS = 3000;
 const LEFT_HOLD_MS = 5000;
 const FILLER_GAP_MS = 1500;
 const RECENT_FOR_PROMPT = 15;
+/** A spacebar-forced session ends after this, so a forgotten tab can't burn API quota. */
+const FORCED_MAX_MS = 60_000;
+
+const tabVisible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
 interface Options {
   /** Space = forceEnter, Esc = reset. On by default. */
@@ -40,6 +44,8 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   const lastFillerRef = useRef(0);
   const recentAiRef = useRef<string[]>([]);
   const leftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Backend said every Gemini model is rate-limited: no calls before this time. */
+  const pausedUntilRef = useRef(0);
 
   const goTo = useCallback((next: LiveState) => {
     stateRef.current = next;
@@ -60,7 +66,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   // ---- one Gemini round trip ----
   const fetchBatch = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || inFlightRef.current) return;
+    if (!video || inFlightRef.current || Date.now() < pausedUntilRef.current || !tabVisible()) return;
     const frame = captureFrame(video);
     if (!frame) return;
 
@@ -75,6 +81,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
         signal: controller.signal,
       });
       const data: CommentsResponse = await res.json();
+      if (data.retryAfterMs) pausedUntilRef.current = Date.now() + data.retryAfterMs;
       const s = stateRef.current;
       if (s !== "ENTERED" && s !== "LIVE") return; // person left while we waited
       if (!data.person_visible || data.comments.length === 0) return;
@@ -126,7 +133,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
       const now = Date.now();
 
       if ((s === "ENTERED" || s === "LIVE") && q) {
-        if (q.size < REFETCH_WHEN_QUEUE_BELOW && now - lastFetchRef.current > MIN_FETCH_GAP_MS) {
+        if (q.size < REFETCH_WHEN_QUEUE_BELOW && now - lastFetchRef.current > MIN_FETCH_GAP_MS && tabVisible()) {
           void fetchBatch();
         }
         // Never let the chat go silent while waiting on (or failing to reach) Gemini.
@@ -152,6 +159,12 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
 
   // ---- controls ----
   const forceEnter = useCallback(() => setForced(true), []);
+
+  useEffect(() => {
+    if (!forced) return;
+    const t = setTimeout(() => setForced(false), FORCED_MAX_MS);
+    return () => clearTimeout(t);
+  }, [forced]);
 
   const reset = useCallback(() => {
     setForced(false);

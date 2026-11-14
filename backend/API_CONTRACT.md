@@ -2,6 +2,38 @@
 
 This document defines the interface between the **Fit Check Frontend** and the **AI Backend Service** (Gemini Vision + Secondary LLM Comment Generator).
 
+> **Status (as built):** the backend is the Next.js app at the repo root (`npm run dev` → `localhost:3000`).
+> The frontend reaches it through the Vite proxy (`/api/*` → `:3000`), via `frontend/src/services/geminiProvider.ts`.
+>
+> - **Live comments use REST polling instead of the WebSocket in §1.** The provider sends a 512px frame to
+>   `POST /api/comments` about every 3–5s and drips the ~10 returned comments into the chat one at a time.
+>   See §0 below. The WebSocket in §1 was not built.
+> - **§2 `POST /api/analyze` is built as specified.** It also accepts an optional `recentComments: string[]`.
+>   On failure it returns `{ "status": "error" }` and the frontend falls back to the mock result.
+
+## 0. Live Comments (REST, as built)
+
+- **Endpoint**: `POST /api/comments`
+
+Request:
+```json
+{ "frame": "<jpeg base64, with or without data: prefix>", "recent": ["comments already shown", "..."] }
+```
+
+Response (always 200; `comments` is empty on any error so the client falls back to filler):
+```json
+{
+  "person_visible": true,
+  "vibe": "minimalist street style",
+  "rating": 9.2,
+  "comments": [
+    { "text": "ok but that jacket shape is so clean 😍", "tone": "hype", "tag": "Outerwear" },
+    { "text": "bro only owns shades of grey lol", "tone": "roast", "tag": "Vibe" }
+  ]
+}
+```
+`tone`: `hype | roast | question | emoji`. `tag`: `Outerwear | Tops | Bottoms | Footwear | Accessories | Vibe`.
+
 ---
 
 ## 1. Live Fit Check Stream (WebSocket)

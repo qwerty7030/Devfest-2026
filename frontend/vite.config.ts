@@ -8,4 +8,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    // The Gemini backend is the Next.js app at the repo root (npm run dev → :3000).
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
 })

@@ -55,9 +55,14 @@ export interface CommentsRequest {
   recent: string[];
 }
 
+/** Matches the categories the frontend's LiveComment.tag / GarmentItem use. */
+export type CommentTag = "Outerwear" | "Tops" | "Bottoms" | "Footwear" | "Accessories" | "Vibe";
+
 export interface CommentsResponse {
   person_visible: boolean;
   vibe?: string;
   rating?: number;
-  comments: { text: string; tone: Tone }[];
+  comments: { text: string; tone: Tone; tag?: CommentTag }[];
+  /** Set when every model is rate-limited: don't call again for this long. */
+  retryAfterMs?: number;
 }

@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AppState, FitResult } from './types/fitCheck';
 import { useCamera } from './hooks/useCamera';
 import { useLiveReactions } from './hooks/useLiveReactions';
-import { mockFitCheckProvider } from './services/mockProvider';
+import { usePersonDetector } from './hooks/usePersonDetector';
+import { fitCheckProvider } from './services/provider';
+import { geminiFitCheckProvider } from './services/geminiProvider';
 import { soundEffects } from './services/soundEffects';
 
 import { PhoneFrame } from './components/Layout/PhoneFrame';
 import { CameraPreview } from './components/Camera/CameraPreview';
 import { SilhouetteGuide } from './components/Camera/SilhouetteGuide';
-import { CountdownOverlay } from './components/Countdown/CountdownOverlay';
 import { LiveHeader } from './components/LiveOverlay/LiveHeader';
 import { CoachingCue } from './components/LiveOverlay/CoachingCue';
 import { LiveChat } from './components/LiveOverlay/LiveChat';
@@ -17,26 +18,38 @@ import { ReactionBar } from './components/LiveOverlay/ReactionBar';
 import { ScannerOverlay } from './components/Analyzing/ScannerOverlay';
 import { ResultsCard } from './components/Results/ResultsCard';
 
-import {
-  Camera,
-  FlipHorizontal,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  RefreshCw,
-  Sliders,
-} from 'lucide-react';
+import { Camera, FlipHorizontal, Volume2, VolumeX, Sparkles, RefreshCw, Sliders } from 'lucide-react';
 
-const RECORDING_DURATION = 15; // 15 seconds fit check
+/** Sessions shorter than this (someone just walking past) end without a results card. */
+const MIN_SESSION_MS = 5000;
+/** Results card stays at least this long before a new walk-in can replace it. */
+const RESULTS_MIN_MS = 4000;
+/** Results card returns to WAITING on its own after this long. */
+const RESULTS_HOLD_MS = 12000;
+/** CoachingCue's tips span 16s; while live we cycle through them. */
+const COACHING_CYCLE_SEC = 16;
 
+/**
+ * Continuous live flow, no recording step:
+ *   WAITING → (person walks in) → LIVE → (person leaves) → ANALYZING → RESULTS → WAITING
+ * Someone walking in during RESULTS (after RESULTS_MIN_MS) goes straight to LIVE.
+ * Space = go live manually, Esc = back to WAITING.
+ */
 export function App() {
-  const [appState, setAppState] = useState<AppState>('READY');
+  const [appState, setAppState] = useState<AppState>('WAITING');
   const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [remainingSec, setRemainingSec] = useState<number>(RECORDING_DURATION);
-  const [elapsedSec, setElapsedSec] = useState<number>(0);
+  const [liveElapsedSec, setLiveElapsedSec] = useState<number>(0);
   const [fitResult, setFitResult] = useState<FitResult | null>(null);
   const [capturedSnapshot, setCapturedSnapshot] = useState<string | undefined>(undefined);
   const [showGuide, setShowGuide] = useState<boolean>(true);
+  /** Manual "Go Live" (button / space): counts as a person in frame until the session ends. */
+  const [forcedLive, setForcedLive] = useState<boolean>(false);
+  const [resultsDismissable, setResultsDismissable] = useState<boolean>(false);
+
+  const sessionRef = useRef(0);
+  const liveStartRef = useRef(0);
+  /** After a manual stop/reset with someone still in frame, they must leave before auto-live again. */
+  const needsReentryRef = useRef(false);
 
   // Camera hook
   const {
@@ -53,6 +66,11 @@ export function App() {
     captureSnapshot,
   } = useCamera();
 
+  // Let the Gemini provider grab frames from the live camera.
+  useEffect(() => {
+    geminiFitCheckProvider.setFrameSource(() => videoRef.current);
+  }, [videoRef]);
+
   // Live Instagram reactions & chat stream hook
   const {
     comments,
@@ -66,9 +84,10 @@ export function App() {
     stopViewerCounter,
   } = useLiveReactions();
 
-  const recordTimerRef = useRef<number | null>(null);
+  // On-device person detection (MediaPipe). Always on while the real camera is up.
+  const { present, error: detectorError } = usePersonDetector(videoRef, isCameraActive && !isTestMode);
+  const personInFrame = present || forcedLive;
 
-  // Toggle Mute Audio
   const handleToggleMute = useCallback(() => {
     setIsMuted((prev) => {
       const next = !prev;
@@ -77,126 +96,147 @@ export function App() {
     });
   }, []);
 
-  // Transition: READY -> COUNTDOWN
-  const handleStartFitCheck = () => {
+  // ---- transitions ----
+
+  const goLive = useCallback(() => {
+    sessionRef.current += 1;
+    liveStartRef.current = Date.now();
+    needsReentryRef.current = false;
     clearLiveState();
-    setAppState('COUNTDOWN');
-  };
-
-  // Transition: COUNTDOWN -> RECORDING
-  const handleCountdownFinished = useCallback(() => {
-    setAppState('RECORDING');
-    setRemainingSec(RECORDING_DURATION);
-    setElapsedSec(0);
+    setFitResult(null);
+    setCapturedSnapshot(undefined);
+    setLiveElapsedSec(0);
+    setAppState('LIVE');
     startViewerCounter();
-
-    // Start live comment stream and simulated reactions
-    mockFitCheckProvider.startLiveFeed(
+    fitCheckProvider.startLiveFeed(
       (comment) => addComment(comment),
-      (emoji) => triggerReaction(emoji)
+      (emoji) => triggerReaction(emoji),
     );
-
-    // Initial burst of reactions
     triggerBurst('🔥', 4);
+  }, [addComment, clearLiveState, startViewerCounter, triggerBurst, triggerReaction]);
 
-    const startTime = Date.now();
-    recordTimerRef.current = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const remaining = Math.max(0, RECORDING_DURATION - elapsed);
+  /** Ends the live session. Scores the fit once if it lasted long enough. */
+  const endLive = useCallback(
+    (manual: boolean) => {
+      fitCheckProvider.stopLiveFeed();
+      stopViewerCounter();
+      setForcedLive(false);
+      // A manual stop while someone is still in frame shouldn't instantly restart.
+      needsReentryRef.current = manual;
 
-      setElapsedSec(elapsed);
-      setRemainingSec(remaining);
-
-      // Take a snapshot around 13-14 seconds
-      if (remaining === 1) {
-        const snap = captureSnapshot();
-        if (snap) setCapturedSnapshot(snap);
+      if (Date.now() - liveStartRef.current < MIN_SESSION_MS) {
+        clearLiveState();
+        setAppState('WAITING');
+        return;
       }
 
-      if (remaining <= 0) {
-        if (recordTimerRef.current) {
-          window.clearInterval(recordTimerRef.current);
-          recordTimerRef.current = null;
-        }
+      soundEffects.playShutter();
+      const session = sessionRef.current;
+      const snapshot = geminiFitCheckProvider.getLastGoodFrameUrl() ?? captureSnapshot() ?? undefined;
+      setCapturedSnapshot(snapshot);
+      setAppState('ANALYZING');
 
-        // Shutter snap sound
-        soundEffects.playShutter();
-
-        // End recording, start analysis
-        mockFitCheckProvider.stopLiveFeed();
-        stopViewerCounter();
-
-        // Capture snapshot if not already done
-        const finalSnap = captureSnapshot();
-        if (finalSnap) setCapturedSnapshot(finalSnap);
-
-        setAppState('ANALYZING');
-      }
-    }, 250);
-  }, [
-    addComment,
-    captureSnapshot,
-    clearLiveState,
-    startViewerCounter,
-    stopViewerCounter,
-    triggerBurst,
-    triggerReaction,
-  ]);
-
-  // Transition: Trigger Analysis
-  useEffect(() => {
-    if (appState === 'ANALYZING') {
-      let isSubscribed = true;
-
-      mockFitCheckProvider
-        .analyzeFit(capturedSnapshot)
+      // Called exactly once per session; the session check drops stale results.
+      fitCheckProvider
+        .analyzeFit(snapshot)
         .then((result) => {
-          if (isSubscribed) {
-            setFitResult(result);
-            setAppState('RESULTS');
-          }
+          if (sessionRef.current !== session) return;
+          setFitResult(result);
+          setAppState('RESULTS');
         })
         .catch((err) => {
           console.error('Fit analysis error:', err);
+          if (sessionRef.current === session) setAppState('WAITING');
         });
+    },
+    [captureSnapshot, clearLiveState, stopViewerCounter],
+  );
 
-      return () => {
-        isSubscribed = false;
-      };
-    }
-  }, [appState, capturedSnapshot]);
-
-  // Stop / Cancel active recording
-  const handleStopRecording = () => {
-    if (recordTimerRef.current) {
-      window.clearInterval(recordTimerRef.current);
-      recordTimerRef.current = null;
-    }
-    mockFitCheckProvider.stopLiveFeed();
+  const backToWaiting = useCallback(() => {
+    sessionRef.current += 1; // drop any in-flight analysis
+    fitCheckProvider.stopLiveFeed();
     stopViewerCounter();
     clearLiveState();
-    setAppState('READY');
-  };
-
-  // Reset to Ready
-  const handleResetToReady = () => {
-    clearLiveState();
+    setForcedLive(false);
     setFitResult(null);
     setCapturedSnapshot(undefined);
-    setAppState('READY');
-  };
+    needsReentryRef.current = true;
+    setAppState('WAITING');
+  }, [clearLiveState, stopViewerCounter]);
 
-  // Quick Retake (Countdown directly)
-  const handleQuickRetake = () => {
-    clearLiveState();
-    setFitResult(null);
-    setCapturedSnapshot(undefined);
-    setAppState('COUNTDOWN');
+  // Presence drives the state machine.
+  useEffect(() => {
+    if (!personInFrame) {
+      needsReentryRef.current = false;
+      if (appState === 'LIVE') endLive(false);
+      return;
+    }
+    if (needsReentryRef.current) return;
+    if (appState === 'WAITING' || (appState === 'RESULTS' && resultsDismissable)) goLive();
+  }, [personInFrame, appState, resultsDismissable, goLive, endLive]);
+
+  // RESULTS: hold briefly before a walk-in can replace it, auto-return after a while.
+  useEffect(() => {
+    if (appState !== 'RESULTS') {
+      setResultsDismissable(false);
+      return;
+    }
+    const minTimer = window.setTimeout(() => setResultsDismissable(true), RESULTS_MIN_MS);
+    const holdTimer = window.setTimeout(() => {
+      clearLiveState();
+      setFitResult(null);
+      setCapturedSnapshot(undefined);
+      setAppState('WAITING');
+    }, RESULTS_HOLD_MS);
+    return () => {
+      window.clearTimeout(minTimer);
+      window.clearTimeout(holdTimer);
+    };
+  }, [appState, clearLiveState]);
+
+  // LIVE: time-on-stream clock for the header and coaching cues.
+  useEffect(() => {
+    if (appState !== 'LIVE') return;
+    const id = window.setInterval(() => {
+      setLiveElapsedSec(Math.floor((Date.now() - liveStartRef.current) / 1000));
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [appState]);
+
+  // WAITING: occasional "anyone there?" chatter so the stream feels alive.
+  useEffect(() => {
+    if (appState !== 'WAITING') return;
+    const id = window.setInterval(() => {
+      if (Math.random() < 0.35) addComment(geminiFitCheckProvider.idleComment());
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [appState, addComment]);
+
+  // Keyboard demo controls: Space = go live, Esc = back to waiting.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        needsReentryRef.current = false;
+        setForcedLive(true);
+      } else if (e.code === 'Escape') {
+        backToWaiting();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [backToWaiting]);
+
+  const handleGoLiveManually = () => {
+    needsReentryRef.current = false;
+    setForcedLive(true);
   };
 
   // User comments from reaction bar
   const handleUserSendComment = (text: string) => {
-    const newComment = mockFitCheckProvider.sendUserComment(text);
+    const newComment = fitCheckProvider.sendUserComment(text);
     addComment(newComment);
   };
 
@@ -220,11 +260,11 @@ export function App() {
           onEnableTestMode={toggleTestMode}
         />
 
-        {/* Framing Silhouette Guide (only in READY state) */}
-        <SilhouetteGuide visible={appState === 'READY' && showGuide} />
+        {/* Framing Silhouette Guide (only while waiting) */}
+        <SilhouetteGuide visible={appState === 'WAITING' && showGuide} />
 
-        {/* READY STATE CONTROLS */}
-        {appState === 'READY' && (
+        {/* WAITING: stream is up, nobody in frame yet */}
+        {appState === 'WAITING' && (
           <>
             {/* Top Bar Navigation */}
             <div className="absolute top-0 inset-x-0 z-20 p-4 pt-5 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
@@ -236,7 +276,6 @@ export function App() {
 
               {/* Utility action icons */}
               <div className="flex items-center gap-1.5">
-                {/* Mirror toggle */}
                 <button
                   onClick={toggleMirror}
                   title="Toggle camera mirror"
@@ -244,8 +283,6 @@ export function App() {
                 >
                   <FlipHorizontal className="w-4 h-4 text-zinc-300" />
                 </button>
-
-                {/* Flip camera facing mode */}
                 <button
                   onClick={toggleFacingMode}
                   title="Switch front/back camera"
@@ -253,21 +290,13 @@ export function App() {
                 >
                   <RefreshCw className="w-4 h-4 text-zinc-300" />
                 </button>
-
-                {/* Mute toggle */}
                 <button
                   onClick={handleToggleMute}
                   title="Toggle sound"
                   className="w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white flex items-center justify-center transition-all"
                 >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-zinc-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-pink-400" />
-                  )}
+                  {isMuted ? <VolumeX className="w-4 h-4 text-zinc-400" /> : <Volume2 className="w-4 h-4 text-pink-400" />}
                 </button>
-
-                {/* Test Mode / Virtual Feed Toggle */}
                 <button
                   onClick={toggleTestMode}
                   title={isTestMode ? 'Switch to Real Webcam' : 'Switch to Virtual Demo Mode'}
@@ -282,12 +311,14 @@ export function App() {
               </div>
             </div>
 
-            {/* Bottom Call to Action Drawer */}
+            {/* Idle chatter */}
+            <LiveChat comments={comments} />
+
+            {/* Bottom prompt */}
             <div className="absolute bottom-0 inset-x-0 z-20 p-5 bg-gradient-to-t from-black via-black/85 to-transparent flex flex-col items-center gap-3">
-              {/* Cue text */}
               <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium">
                 <Sliders className="w-3.5 h-3.5 text-pink-400" />
-                <span>15s Live Audience Fit Reaction</span>
+                <span>{isTestMode ? 'Virtual demo mode' : 'Step into frame to go live'}</span>
                 <button
                   onClick={() => setShowGuide((prev) => !prev)}
                   className="underline hover:text-white ml-1 text-[11px]"
@@ -296,74 +327,50 @@ export function App() {
                 </button>
               </div>
 
-              {/* Start Fit Check Action Button */}
-              <button
-                onClick={handleStartFitCheck}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-98 text-white font-black text-base tracking-wide transition-all shadow-xl shadow-pink-500/30 flex items-center justify-center gap-3 group animate-pulse-glow"
-              >
-                <div className="p-1 rounded-full bg-white/20 group-hover:scale-110 transition-transform">
-                  <Camera className="w-5 h-5 fill-white/20" />
+              <div className="w-full py-4 px-6 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-base tracking-wide flex items-center justify-center gap-3 animate-pulse-glow">
+                <div className="p-1 rounded-full bg-pink-500/30">
+                  <Camera className="w-5 h-5" />
                 </div>
-                <span>START FIT CHECK</span>
-              </button>
+                <span>WALK IN TO START YOUR FIT CHECK</span>
+              </div>
 
-              <p className="text-[11px] text-zinc-500 text-center max-w-xs">
-                Walk into frame, do a 360° turn, and show off your kicks. Gemini Vision will rate your drip.
-              </p>
+              <button onClick={handleGoLiveManually} className="text-[11px] text-zinc-400 hover:text-white underline">
+                Not detecting you? Go live manually (Space)
+              </button>
+              {detectorError && <p className="text-[11px] text-amber-400 text-center">{detectorError}</p>}
             </div>
           </>
         )}
 
-        {/* COUNTDOWN OVERLAY */}
-        {appState === 'COUNTDOWN' && (
-          <CountdownOverlay onComplete={handleCountdownFinished} />
-        )}
-
-        {/* RECORDING STATE (INSTAGRAM LIVE OVERLAY) */}
-        {appState === 'RECORDING' && (
+        {/* LIVE (INSTAGRAM LIVE OVERLAY) */}
+        {appState === 'LIVE' && (
           <>
-            {/* Top Bar with LIVE pill, Viewers, Timer and Controls */}
             <LiveHeader
               viewerCount={viewerCount}
-              remainingSeconds={remainingSec}
-              totalDurationSeconds={RECORDING_DURATION}
+              elapsedSeconds={liveElapsedSec}
               isMuted={isMuted}
               onToggleMute={handleToggleMute}
-              onStop={handleStopRecording}
+              onStop={() => endLive(true)}
             />
 
-            {/* Coaching Guidance Banner */}
+            {/* Coaching tips cycle while live */}
             <CoachingCue
-              elapsedSeconds={elapsedSec}
-              totalDurationSeconds={RECORDING_DURATION}
+              elapsedSeconds={liveElapsedSec % COACHING_CYCLE_SEC}
+              totalDurationSeconds={COACHING_CYCLE_SEC}
             />
 
-            {/* Scrolling Instagram Chat Stream */}
             <LiveChat comments={comments} />
-
-            {/* Floating Reactions Rising Up */}
             <FloatingReactions reactions={reactions} />
-
-            {/* Bottom Reaction and Comment Input Bar */}
-            <ReactionBar
-              onSendComment={handleUserSendComment}
-              onSendReaction={handleUserSendReaction}
-            />
+            <ReactionBar onSendComment={handleUserSendComment} onSendReaction={handleUserSendReaction} />
           </>
         )}
 
         {/* ANALYZING STATE */}
-        {appState === 'ANALYZING' && (
-          <ScannerOverlay snapshotUrl={capturedSnapshot} />
-        )}
+        {appState === 'ANALYZING' && <ScannerOverlay snapshotUrl={capturedSnapshot} />}
 
         {/* RESULTS STATE */}
         {appState === 'RESULTS' && fitResult && (
-          <ResultsCard
-            result={fitResult}
-            onReset={handleResetToReady}
-            onRetake={handleQuickRetake}
-          />
+          <ResultsCard result={fitResult} onReset={backToWaiting} onRetake={goLive} />
         )}
       </div>
     </PhoneFrame>

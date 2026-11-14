@@ -1,7 +1,7 @@
 import type { FitCheckProvider } from './fitCheckProvider';
 import type { LiveComment, FitResult } from '../types/fitCheck';
 
-const MOCK_USERS = [
+export const MOCK_USERS = [
   {
     username: 'kai_cenat_fan',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',

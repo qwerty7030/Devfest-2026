@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# MediaPipe wasm is copied from node_modules on install
+/public/mediapipe/

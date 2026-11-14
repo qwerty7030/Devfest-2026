@@ -39,6 +39,24 @@ npm run dev
 
 Open the local URL (usually `http://localhost:5173`) in your browser.
 
+## 🧠 Running the Gemini Backend
+
+The frontend proxies `/api/*` to the Next.js backend at the repo root. Run it in a second terminal:
+
+```bash
+# from the repo root
+npm install                 # also copies MediaPipe's wasm into public/
+cp .env.example .env.local  # add GEMINI_API_KEY (https://aistudio.google.com/apikey)
+npm run dev                 # → http://localhost:3000
+```
+
+- With the backend running, live comments and the results card come from Gemini.
+- **Continuous live mode (no recording step):** the stream is always up. MediaPipe (in the browser) detects when someone walks into frame and the live comments start. When they leave for ~2.5s, Gemini scores their last frame and the results card shows, then it's back to waiting for the next person. **Space** = go live manually, **Esc** = back to waiting. *(This replaces the countdown and 15s recording flow described below.)*
+- **Quota:** `GEMINI_MODEL` is a fallback chain. If one model hits its quota (429), the backend moves to the next, and if all are limited, the app runs on canned comments until the quota resets. While someone is live, the app calls Gemini about once every 6s, and never from a hidden tab.
+- If the backend is down or errors, the chat keeps going with canned filler and the results fall back to mock data.
+- `VITE_USE_MOCK=1 npm run dev` (in `frontend/`) uses the original mock provider only.
+- Comment style examples come from `data/fitcheck_comments.json` (see [backend/README.md](backend/README.md)).
+
 ---
 
 ## ✨ Frontend Features & State Flow

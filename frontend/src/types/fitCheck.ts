@@ -1,4 +1,11 @@
-export type AppState = 'READY' | 'COUNTDOWN' | 'RECORDING' | 'ANALYZING' | 'RESULTS';
+/**
+ * Continuous live flow:
+ *   WAITING   – stream is up, nobody in frame
+ *   LIVE      – someone is in frame; Gemini comments are flowing
+ *   ANALYZING – they left; scoring their last good frame
+ *   RESULTS   – showing the fit card until dismissed or someone walks in
+ */
+export type AppState = 'WAITING' | 'LIVE' | 'ANALYZING' | 'RESULTS';
 
 export interface LiveComment {
   id: string;
