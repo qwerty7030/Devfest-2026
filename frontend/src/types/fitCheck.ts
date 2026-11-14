@@ -30,6 +30,7 @@ export interface GarmentItem {
 }
 
 export interface FitResult {
+  source?: 'ai' | 'demo';
   overallScore: number;
   archetype: string;
   summary: string;

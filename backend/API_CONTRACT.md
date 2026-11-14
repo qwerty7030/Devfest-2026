@@ -1,133 +1,36 @@
-# Fit Check — Frontend / Backend API Contract
+# Fit Check API
 
-This document defines the interface between the **Fit Check Frontend** and the **AI Backend Service** (Gemini Vision + Secondary LLM Comment Generator).
+All routes are same-origin REST endpoints. There is no WebSocket requirement or separate port 8000 service. API keys stay on the server. Responses use JSON; successful AI responses have `Cache-Control: no-store`.
 
----
+## `GET /api/health`
 
-## 1. Live Fit Check Stream (WebSocket)
+Returns `{ "status": "ok", "aiConfigured": true }`. The boolean checks key presence, not whether Google accepts the key or model.
 
-- **Endpoint**: `ws://localhost:8000/api/fitcheck/stream`
-- **Protocol**: WebSocket
+## `POST /api/comments`
 
-### Client -> Server Messages
+Request: `{ "frame": "<base64 JPEG without data prefix>", "recent": ["previous comment"] }`.
 
-#### Send Frame (Periodic snapshot during 10-15s recording)
-Sent every ~1.5–2.0 seconds:
-```json
-{
-  "type": "FRAME",
-  "sessionId": "fit_chk_91823a",
-  "imageBase64": "data:image/jpeg;base64,...",
-  "elapsedSeconds": 4.5,
-  "stage": "TURNING" // "FRONT_POSE" | "TURNING" | "FOOTWEAR" | "FINAL_POSE"
-}
-```
+Response: `{ "person_visible": true, "vibe": "relaxed utility", "rating": 8.5, "comments": [{ "text": "The olive layers work together", "tone": "hype" }] }`.
 
-#### End Recording
-Sent when the 10–15s timer finishes:
-```json
-{
-  "type": "COMPLETE",
-  "sessionId": "fit_chk_91823a"
-}
-```
+`vibe` and `rating` are optional; rating is 0–10. Tones are `hype`, `roast`, `question`, or `emoji`. Up to 12 comments are returned; text is capped at 150 characters. Only the last 20 recent comments are considered. No visible person produces an empty comment list. The client polls sequentially with a four-second delay after completion and paces comment display.
 
-### Server -> Client Messages
+## `POST /api/fitcheck/analyze`
 
-#### Audience Comment
-Sent in real-time as the secondary LLM responds to Gemini's observations:
-```json
-{
-  "type": "COMMENT",
-  "id": "cmt_991823",
-  "username": "hypebeast_zoe",
-  "avatarUrl": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
-  "comment": "The silhouette on those pants is insane 🔥",
-  "timestamp": 1731617200000,
-  "tag": "Outerwear"
-}
-```
+Request: `{ "snapshotBase64": "data:image/jpeg;base64,..." }`. Raw JPEG base64 also works. The client analyzes the first photo and retains the other photo locally.
 
-#### Audience Reaction
-Simulated crowd reaction burst:
-```json
-{
-  "type": "REACTION",
-  "emoji": "🔥",
-  "count": 5
-}
-```
+Response: `{ "status": "success", "data": { ... } }`, where `data` includes:
 
----
+- `overallScore` (0–100), `archetype`, `summary`, `caption`, and `source: "ai"`.
+- `garments`: up to eight items with `category`, `description`, `color`, `confidence` (0–1), optional `highlight` and percentage tag positions.
+- `topComments`: up to three simulated audience comments with local avatar URLs, generated identifiers, username, comment, and display fields.
+- `likesCount: 0`. Social engagement is not fabricated by this endpoint.
 
-## 2. Fit Analysis Summary (REST API)
+Client-side `capturedPhotos`, `capturedSnapshotUrl`, and `timestamp` are appended after a successful response. They are not stored on the server. The server sanitizes model output and rejects incomplete reports.
 
-- **Endpoint**: `POST /api/fitcheck/analyze`
-- **Content-Type**: `application/json`
+## Limits and errors
 
-### Request Payload
-```json
-{
-  "sessionId": "fit_chk_91823a",
-  "snapshotBase64": "data:image/jpeg;base64,...",
-  "durationSeconds": 15
-}
-```
+JPEGs must have a JPEG signature and be under 2,000,000 base64 characters. The actual request body stream is limited to 3 MB. The camera downsizes captures to at most 960 pixels wide and JPEG quality 0.78. Gemini deadlines are 8 seconds for commentary and 25 seconds for analysis; browser cancellation propagates to the model request.
 
-### Response Payload
-```json
-{
-  "status": "success",
-  "data": {
-    "overallScore": 94,
-    "archetype": "Neo-Streetwear Minimalist",
-    "summary": "Immaculate proportion balancing with muted earth tones and clean statement sneakers. Strong silhouette control on the turn.",
-    "garments": [
-      {
-        "category": "Outerwear",
-        "description": "Boxy Cropped Canvas Work Jacket",
-        "color": "Washed Olive",
-        "confidence": 0.98
-      },
-      {
-        "category": "Tops",
-        "description": "Heavyweight Drop-Shoulder Tee",
-        "color": "Off-White / Cream",
-        "confidence": 0.94
-      },
-      {
-        "category": "Bottoms",
-        "description": "Wide-Leg Pleated Trousers",
-        "color": "Charcoal Black",
-        "confidence": 0.97
-      },
-      {
-        "category": "Footwear",
-        "description": "Retro Low-Profile Leather Trainers",
-        "color": "Chalk / Gum Sole",
-        "confidence": 0.92
-      },
-      {
-        "category": "Accessories",
-        "description": "Silver Cuban Link Chain & Structured Crossbody",
-        "color": "Silver / Matte Black",
-        "confidence": 0.89
-      }
-    ],
-    "topComments": [
-      {
-        "username": "drip_curator",
-        "comment": "The jacket cropped fit goes crazy with wide leg pants 🤌"
-      },
-      {
-        "username": "sneakerhead99",
-        "comment": "Clean shoe choice, ties the whole palette together!"
-      },
-      {
-        "username": "vintage_plug",
-        "comment": "9.5/10 easily, immaculate proportions 🔥"
-      }
-    ]
-  }
-}
-```
+Failures use `{ "error": "A user-readable explanation" }`: 400 for malformed input, 413 for oversized payloads, 422 for no discernible outfit, 502 for incomplete analysis, and 503 for missing configuration or provider failure. Failed real sessions do not return sample scores. Demo mode uses only the client mock provider and is explicitly labeled.
+
+Endpoints do not implement authentication or durable rate limiting. Restrict access or add an authenticated gateway and spending limits before a public launch.

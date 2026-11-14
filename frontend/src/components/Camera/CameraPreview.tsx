@@ -15,7 +15,6 @@ interface CameraPreviewProps {
 export const CameraPreview: React.FC<CameraPreviewProps> = ({
   videoRef,
   isMirrored,
-  isCameraActive: _,
   hasPermission,
   errorMessage,
   isTestMode,
@@ -154,12 +153,13 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
       {isTestMode && (
         <div className="relative w-full h-full">
           <canvas
+            data-demo-camera
             ref={canvasRef}
             width={480}
             height={854}
             className="w-full h-full object-cover"
           />
-          <div className="absolute top-4 left-4 bg-purple-600/90 text-white text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg backdrop-blur-sm">
+          <div className="absolute top-16 left-4 bg-purple-600/90 text-white text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg backdrop-blur-sm">
             <Sparkles className="w-3 h-3" />
             <span>Virtual Demo Feed</span>
           </div>
@@ -168,7 +168,7 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
 
       {/* Permission Denied or Camera Error State */}
       {!isTestMode && hasPermission === false && (
-        <div className="absolute inset-0 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+        <div className="camera-error absolute inset-0 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
           <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
             <CameraOff className="w-8 h-8" />
           </div>
@@ -195,13 +195,6 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
         </div>
       )}
 
-      {/* Loading Stream Placeholder */}
-      {!isTestMode && hasPermission === null && (
-        <div className="absolute inset-0 bg-zinc-950 flex flex-col items-center justify-center z-10 text-white">
-          <div className="w-10 h-10 border-4 border-pink-500/30 border-t-pink-500 rounded-full animate-spin mb-3" />
-          <p className="text-xs text-zinc-400 font-mono">Initializing camera...</p>
-        </div>
-      )}
     </div>
   );
 };

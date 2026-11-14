@@ -3,15 +3,16 @@ import { Sparkles, Scan, Bot } from 'lucide-react';
 
 interface ScannerOverlayProps {
   snapshotUrl?: string;
+  isDemo?: boolean;
 }
 
-export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ snapshotUrl }) => {
+export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ snapshotUrl, isDemo }) => {
   const [stepIndex, setStepIndex] = useState(0);
 
   const steps = [
     { title: 'Gemini Vision Segmenting Garments', detail: 'Isolating outerwear, silhouette & drape' },
     { title: 'Analyzing Proportion & Palette', detail: 'Evaluating color harmony and shoe break' },
-    { title: 'Secondary LLM Polling Crowd Chat', detail: 'Synthesizing live reactions & drip score' },
+    { title: 'Putting Your Style Report Together', detail: 'A personal perspective on your outfit' },
   ];
 
   useEffect(() => {
@@ -40,7 +41,7 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ snapshotUrl }) =
       <div className="relative z-20 flex justify-center">
         <div className="bg-black/70 backdrop-blur-md border border-pink-500/40 px-4 py-1.5 rounded-full flex items-center gap-2 text-pink-300 text-xs font-mono font-medium shadow-lg animate-pulse">
           <Bot className="w-4 h-4 text-pink-400" />
-          <span>GEMINI VISION ENGINE ACTIVE</span>
+          <span>{isDemo ? 'PREPARING SAMPLE STYLE REPORT' : 'YOUR PERSONAL STYLE REVIEW'}</span>
         </div>
       </div>
 
@@ -59,13 +60,13 @@ export const ScannerOverlay: React.FC<ScannerOverlayProps> = ({ snapshotUrl }) =
 
           {/* Real-time floating detection pills */}
           <div className="absolute -top-3 left-4 bg-zinc-900/90 text-white text-[10px] font-mono px-2 py-0.5 rounded border border-pink-500/50 shadow">
-            OUTERWEAR: 98%
+            SILHOUETTE
           </div>
           <div className="absolute top-1/2 -right-3 bg-zinc-900/90 text-white text-[10px] font-mono px-2 py-0.5 rounded border border-purple-500/50 shadow">
-            TAILORING: 96%
+            COLOR PALETTE
           </div>
           <div className="absolute -bottom-3 left-6 bg-zinc-900/90 text-white text-[10px] font-mono px-2 py-0.5 rounded border border-cyan-500/50 shadow">
-            FOOTWEAR: 94%
+            OUTFIT DETAILS
           </div>
         </div>
       </div>

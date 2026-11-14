@@ -54,7 +54,11 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     });
     queueRef.current = q;
     q.start();
-    return () => q.stop();
+    return () => {
+      q.stop();
+      inFlightRef.current?.abort();
+      if (leftTimerRef.current) clearTimeout(leftTimerRef.current);
+    };
   }, []);
 
   // ---- one Gemini round trip ----
@@ -104,6 +108,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
         { front: true },
       );
       recentAiRef.current = [];
+      setLastResult(null);
       goTo("ENTERED");
       void fetchBatch();
     } else if (!present && (s === "ENTERED" || s === "LIVE")) {

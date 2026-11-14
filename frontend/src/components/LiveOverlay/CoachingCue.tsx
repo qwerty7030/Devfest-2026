@@ -30,7 +30,7 @@ export const CoachingCue: React.FC<CoachingCueProps> = ({ elapsedSeconds }) => {
   }
 
   return (
-    <div className="absolute top-16 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
+    <div className="absolute top-28 left-0 right-0 z-20 flex justify-center px-4 pointer-events-none">
       <div className="bg-black/60 backdrop-blur-md border border-white/20 text-white px-4 py-1.5 rounded-full shadow-2xl flex items-center gap-2.5 transition-all duration-300">
         <div className="p-1 rounded-full bg-white/10 flex items-center justify-center">
           {icon}

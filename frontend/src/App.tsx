@@ -1,10 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Camera, FlipHorizontal, Volume2, VolumeX, RefreshCw, ArrowUpRight, Sparkles, X } from 'lucide-react';
 import type { AppState, FitResult } from './types/fitCheck';
 import { useCamera } from './hooks/useCamera';
 import { useLiveReactions } from './hooks/useLiveReactions';
+import { usePersonDetector } from '../../lib/fitcheck/usePersonDetector';
+import { startLiveFeed, analyzeFit } from './services/apiProvider';
 import { mockFitCheckProvider } from './services/mockProvider';
 import { soundEffects } from './services/soundEffects';
-
 import { PhoneFrame } from './components/Layout/PhoneFrame';
 import { CameraPreview } from './components/Camera/CameraPreview';
 import { SilhouetteGuide } from './components/Camera/SilhouetteGuide';
@@ -16,367 +20,111 @@ import { FloatingReactions } from './components/LiveOverlay/FloatingReactions';
 import { ReactionBar } from './components/LiveOverlay/ReactionBar';
 import { ScannerOverlay } from './components/Analyzing/ScannerOverlay';
 import { PosingScreen } from './components/Posing/PosingScreen';
-import { InstagramPostCard } from './components/InstagramPost/InstagramPostCard';
+import { StyleResults } from './components/Results/StyleResults';
+import './studio.css';
 
-import {
-  Camera,
-  FlipHorizontal,
-  Volume2,
-  VolumeX,
-  Sparkles,
-  RefreshCw,
-  Sliders,
-} from 'lucide-react';
-
-const RECORDING_DURATION = 15; // 15 seconds fit check
+const DURATION = 15;
 
 export function App() {
-  const [appState, setAppState] = useState<AppState>('READY');
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const [remainingSec, setRemainingSec] = useState<number>(RECORDING_DURATION);
-  const [elapsedSec, setElapsedSec] = useState<number>(0);
-  const [fitResult, setFitResult] = useState<FitResult | null>(null);
-  const [capturedSnapshot, setCapturedSnapshot] = useState<string | undefined>(undefined);
-  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
-  const [showGuide, setShowGuide] = useState<boolean>(true);
+  const [stage, setStage] = useState<AppState>('READY');
+  const [muted, setMuted] = useState(true);
+  const [elapsed, setElapsed] = useState(0);
+  const [result, setResult] = useState<FitResult | null>(null);
+  const [snapshot, setSnapshot] = useState<string>();
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Connecting your AI audience…');
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const camera = useCamera();
+  const live = useLiveReactions();
+  const detector = usePersonDetector(camera.videoRef, camera.isCameraActive && !camera.isTestMode && stage === 'READY');
+  const analysisRef = useRef<AbortController | null>(null);
 
-  // Camera hook
-  const {
-    videoRef,
-    isMirrored,
-    isCameraActive,
-    hasPermission,
-    errorMessage,
-    isTestMode,
-    startCamera,
-    toggleMirror,
-    toggleFacingMode,
-    toggleTestMode,
-    captureSnapshot,
-  } = useCamera();
-
-  // Live Instagram reactions & chat stream hook
-  const {
-    comments,
-    reactions,
-    viewerCount,
-    addComment,
-    triggerReaction,
-    triggerBurst,
-    clearLiveState,
-    startViewerCounter,
-    stopViewerCounter,
-  } = useLiveReactions();
-
-  const recordTimerRef = useRef<number | null>(null);
-
-  // Toggle Mute Audio
-  const handleToggleMute = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      soundEffects.setMuted(next);
-      return next;
-    });
-  }, []);
-
-  // Transition: READY -> COUNTDOWN
-  const handleStartFitCheck = () => {
-    clearLiveState();
-    setCapturedPhotos([]);
-    setAppState('COUNTDOWN');
-  };
-
-  // Transition: COUNTDOWN -> RECORDING
-  const handleCountdownFinished = useCallback(() => {
-    setAppState('RECORDING');
-    setRemainingSec(RECORDING_DURATION);
-    setElapsedSec(0);
-    startViewerCounter();
-
-    // Start live comment stream and simulated reactions
-    mockFitCheckProvider.startLiveFeed(
-      (comment) => addComment(comment),
-      (emoji) => triggerReaction(emoji)
-    );
-
-    // Initial burst of reactions
-    triggerBurst('🔥', 4);
-
-    const startTime = Date.now();
-    recordTimerRef.current = window.setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const remaining = Math.max(0, RECORDING_DURATION - elapsed);
-
-      setElapsedSec(elapsed);
-      setRemainingSec(remaining);
-
-      // Take a background snapshot around 13-14 seconds for scanning
-      if (remaining === 1) {
-        const snap = captureSnapshot();
-        if (snap) setCapturedSnapshot(snap);
-      }
-
-      if (remaining <= 0) {
-        if (recordTimerRef.current) {
-          window.clearInterval(recordTimerRef.current);
-          recordTimerRef.current = null;
-        }
-
-        // Shutter snap sound
-        soundEffects.playShutter();
-
-        // End recording, start analysis
-        mockFitCheckProvider.stopLiveFeed();
-        stopViewerCounter();
-
-        // Capture snapshot if not already done
-        const finalSnap = captureSnapshot();
-        if (finalSnap) setCapturedSnapshot(finalSnap);
-
-        setAppState('ANALYZING');
-      }
-    }, 250);
-  }, [
-    addComment,
-    captureSnapshot,
-    clearLiveState,
-    startViewerCounter,
-    stopViewerCounter,
-    triggerBurst,
-    triggerReaction,
-  ]);
-
-  // Transition: ANALYZING -> POSING (after 2s scanning)
+  useEffect(() => { soundEffects.setMuted(muted); }, [muted]);
   useEffect(() => {
-    if (appState === 'ANALYZING') {
-      const timer = window.setTimeout(() => {
-        // Transition to POSING photoshoot
-        setAppState('POSING');
-      }, 2100);
+    const ctrl = new AbortController();
+    fetch('/api/health', { signal: ctrl.signal }).then(r => r.json()).then(d => setConfigured(d.aiConfigured)).catch(() => {});
+    return () => ctrl.abort();
+  }, []);
+  useEffect(() => () => analysisRef.current?.abort(), []);
+  useEffect(() => {
+    if (stage === 'RESULTS') camera.stopCamera();
+  }, [stage, camera.stopCamera]);
 
-      return () => {
-        window.clearTimeout(timer);
-      };
-    }
-  }, [appState]);
+  const { addComment, triggerReaction, startViewerCounter, stopViewerCounter } = live;
+  const capture = camera.captureSnapshot;
+  const demo = camera.isTestMode;
+  useEffect(() => {
+    if (stage !== 'RECORDING') return;
+    setElapsed(0);
+    startViewerCounter();
+    setStatus(demo ? 'Demo audience · sample reactions' : 'Connecting your AI audience…');
+    let stop: () => void;
+    if (demo) { mockFitCheckProvider.startLiveFeed(addComment, triggerReaction); stop = () => mockFitCheckProvider.stopLiveFeed(); }
+    else stop = startLiveFeed(capture, addComment, setStatus);
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const seconds = Math.min(DURATION, Math.floor((Date.now() - started) / 1000));
+      setElapsed(seconds);
+      if (seconds >= DURATION) {
+        const photo = capture();
+        if (photo) setSnapshot(photo);
+        soundEffects.playShutter();
+        setStage('POSING');
+      }
+    }, 200);
+    return () => { clearInterval(timer); stop(); stopViewerCounter(); };
+  }, [stage, demo, capture, addComment, triggerReaction, startViewerCounter, stopViewerCounter]);
 
-  // Transition: POSING -> RESULTS (User finishes taking 1-2 photos)
-  const handleFinishPosing = async (photos: string[]) => {
-    setCapturedPhotos(photos);
-    setAppState('ANALYZING'); // Brief loading spinner / synthesis
-
+  const reset = () => { analysisRef.current?.abort(); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setSnapshot(undefined); setStage('READY'); };
+  const begin = () => { live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
+  const countdownFinished = useCallback(() => setStage('RECORDING'), []);
+  const finish = async (taken: string[]) => {
+    if (!taken.length || analysisRef.current && !analysisRef.current.signal.aborted && stage === 'ANALYZING') return;
+    analysisRef.current?.abort();
+    const ctrl = new AbortController();
+    analysisRef.current = ctrl;
+    setPhotos(taken); setSnapshot(taken[0]); setStage('ANALYZING'); setError(null);
     try {
-      const result = await mockFitCheckProvider.analyzeFit(photos);
-      setFitResult(result);
-      setAppState('RESULTS');
-    } catch (err) {
-      console.error('Fit analysis error:', err);
+      const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(taken[0], ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      setResult({ ...data, source: demo ? 'demo' : 'ai', capturedPhotos: taken, capturedSnapshotUrl: taken[0] });
+      setStage('RESULTS');
+    } catch (e) {
+      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
     }
   };
 
-  // Stop / Cancel active recording
-  const handleStopRecording = () => {
-    if (recordTimerRef.current) {
-      window.clearInterval(recordTimerRef.current);
-      recordTimerRef.current = null;
-    }
-    mockFitCheckProvider.stopLiveFeed();
-    stopViewerCounter();
-    clearLiveState();
-    setAppState('READY');
-  };
-
-  // Reset to Ready
-  const handleResetToReady = () => {
-    clearLiveState();
-    setFitResult(null);
-    setCapturedSnapshot(undefined);
-    setCapturedPhotos([]);
-    setAppState('READY');
-  };
-
-  // Retake Photos (returns to Posing screen)
-  const handleRetakePhotos = () => {
-    setCapturedPhotos([]);
-    setAppState('POSING');
-  };
-
-  // User comments from reaction bar
-  const handleUserSendComment = (text: string) => {
-    const newComment = mockFitCheckProvider.sendUserComment(text);
-    addComment(newComment);
-  };
-
-  // User taps reaction button
-  const handleUserSendReaction = (emoji: string) => {
-    triggerReaction(emoji);
-  };
-
-  return (
-    <PhoneFrame>
-      <div className="relative w-full h-full flex flex-col justify-between overflow-hidden bg-black">
-        {/* Base Layer: Mirrored Video Feed (visible in READY, COUNTDOWN, RECORDING, POSING) */}
-        <CameraPreview
-          videoRef={videoRef}
-          isMirrored={isMirrored}
-          isCameraActive={isCameraActive}
-          hasPermission={hasPermission}
-          errorMessage={errorMessage}
-          isTestMode={isTestMode}
-          onRetry={startCamera}
-          onEnableTestMode={toggleTestMode}
-        />
-
-        {/* Framing Silhouette Guide (only in READY state) */}
-        <SilhouetteGuide visible={appState === 'READY' && showGuide} />
-
-        {/* READY STATE CONTROLS */}
-        {appState === 'READY' && (
-          <>
-            {/* Top Bar Navigation */}
-            <div className="absolute top-0 inset-x-0 z-20 p-4 pt-5 flex items-center justify-between bg-gradient-to-b from-black/80 via-black/40 to-transparent">
-              {/* App Title badge */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white font-bold text-xs tracking-wider">
-                <span className="w-2 h-2 rounded-full bg-pink-500 animate-ping" />
-                <span>FIT CHECK</span>
-              </div>
-
-              {/* Utility action icons */}
-              <div className="flex items-center gap-1.5">
-                {/* Mirror toggle */}
-                <button
-                  onClick={toggleMirror}
-                  title="Toggle camera mirror"
-                  className="w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white flex items-center justify-center transition-all"
-                >
-                  <FlipHorizontal className="w-4 h-4 text-zinc-300" />
-                </button>
-
-                {/* Flip camera facing mode */}
-                <button
-                  onClick={toggleFacingMode}
-                  title="Switch front/back camera"
-                  className="w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white flex items-center justify-center transition-all"
-                >
-                  <RefreshCw className="w-4 h-4 text-zinc-300" />
-                </button>
-
-                {/* Mute toggle */}
-                <button
-                  onClick={handleToggleMute}
-                  title="Toggle sound"
-                  className="w-9 h-9 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md border border-white/10 text-white flex items-center justify-center transition-all"
-                >
-                  {isMuted ? (
-                    <VolumeX className="w-4 h-4 text-zinc-400" />
-                  ) : (
-                    <Volume2 className="w-4 h-4 text-pink-400" />
-                  )}
-                </button>
-
-                {/* Test Mode / Virtual Feed Toggle */}
-                <button
-                  onClick={toggleTestMode}
-                  title={isTestMode ? 'Switch to Real Webcam' : 'Switch to Virtual Demo Mode'}
-                  className={`w-9 h-9 rounded-full backdrop-blur-md border flex items-center justify-center transition-all ${
-                    isTestMode
-                      ? 'bg-purple-600 border-purple-400 text-white shadow-lg shadow-purple-600/40'
-                      : 'bg-black/50 hover:bg-black/70 border-white/10 text-zinc-300'
-                  }`}
-                >
-                  <Sparkles className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Call to Action Drawer */}
-            <div className="absolute bottom-0 inset-x-0 z-20 p-5 bg-gradient-to-t from-black via-black/85 to-transparent flex flex-col items-center gap-3">
-              {/* Cue text */}
-              <div className="flex items-center gap-2 text-zinc-400 text-xs font-medium">
-                <Sliders className="w-3.5 h-3.5 text-pink-400" />
-                <span>15s Live Stream ➔ Photoshoot ➔ IG Post</span>
-                <button
-                  onClick={() => setShowGuide((prev) => !prev)}
-                  className="underline hover:text-white ml-1 text-[11px]"
-                >
-                  {showGuide ? 'Hide Guide' : 'Show Guide'}
-                </button>
-              </div>
-
-              {/* Start Fit Check Action Button */}
-              <button
-                onClick={handleStartFitCheck}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-98 text-white font-black text-base tracking-wide transition-all shadow-xl shadow-pink-500/30 flex items-center justify-center gap-3 group animate-pulse-glow"
-              >
-                <div className="p-1 rounded-full bg-white/20 group-hover:scale-110 transition-transform">
-                  <Camera className="w-5 h-5 fill-white/20" />
-                </div>
-                <span>START FIT CHECK</span>
-              </button>
-
-              <p className="text-[11px] text-zinc-500 text-center max-w-xs">
-                Walk into frame, 360° turn, strike 1–2 poses for your post, and get your drip rated with top crowd comments.
-              </p>
-            </div>
-          </>
-        )}
-
-        {/* COUNTDOWN OVERLAY */}
-        {appState === 'COUNTDOWN' && (
-          <CountdownOverlay onComplete={handleCountdownFinished} />
-        )}
-
-        {/* RECORDING STATE (INSTAGRAM LIVE OVERLAY) */}
-        {appState === 'RECORDING' && (
-          <>
-            <LiveHeader
-              viewerCount={viewerCount}
-              remainingSeconds={remainingSec}
-              totalDurationSeconds={RECORDING_DURATION}
-              isMuted={isMuted}
-              onToggleMute={handleToggleMute}
-              onStop={handleStopRecording}
-            />
-
-            <CoachingCue
-              elapsedSeconds={elapsedSec}
-              totalDurationSeconds={RECORDING_DURATION}
-            />
-
-            <LiveChat comments={comments} />
-            <FloatingReactions reactions={reactions} />
-            <ReactionBar
-              onSendComment={handleUserSendComment}
-              onSendReaction={handleUserSendReaction}
-            />
-          </>
-        )}
-
-        {/* ANALYZING STATE (SCANNER) */}
-        {appState === 'ANALYZING' && (
-          <ScannerOverlay snapshotUrl={capturedSnapshot || capturedPhotos[0]} />
-        )}
-
-        {/* POSING PHOTOSHOOT STATE (1-2 PHOTOS FOR POST) */}
-        {appState === 'POSING' && (
-          <PosingScreen
-            onCapturePhoto={captureSnapshot}
-            onFinishPosing={handleFinishPosing}
-            onCancel={handleResetToReady}
-          />
-        )}
-
-        {/* RESULTS STATE (INSTAGRAM POST WITH TOP COMMENTS) */}
-        {appState === 'RESULTS' && fitResult && (
-          <InstagramPostCard
-            result={fitResult}
-            onReset={handleResetToReady}
-            onRetake={handleRetakePhotos}
-          />
-        )}
+  return <PhoneFrame><div className="relative w-full h-full overflow-hidden bg-black text-white">
+    <CameraPreview {...camera} onRetry={camera.startCamera} onEnableTestMode={camera.toggleTestMode}/>
+    {stage === 'READY' && <>
+      <div className="camera-toolbar"><span className="camera-mode"><i/>{demo ? 'DEMO STUDIO' : 'CAMERA STUDIO'}</span><div>
+        <button onClick={camera.toggleMirror} aria-label="Mirror camera" aria-pressed={camera.isMirrored} title="Mirror camera"><FlipHorizontal size={17}/></button>
+        <button onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera" title="Switch camera"><RefreshCw size={17}/></button>
+        <button onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'} title={muted ? 'Enable sound' : 'Mute sound'}>{muted ? <VolumeX size={17}/> : <Volume2 size={17}/>}</button>
+      </div></div>
+      {(camera.isCameraActive || demo) && <SilhouetteGuide visible={!demo}/>}
+      {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome">
+        <div className="viewfinder"><span/><Camera size={38} strokeWidth={1}/><span/></div>
+        <span className="eyebrow">A SPACE FOR YOUR STYLE</span><h2>Let’s see<br/>the whole fit.</h2><p>Find good light. Step into frame.<br/>We’ll bring the hype.</p>
+      </div>}
+      <div className="studio-controls">
+        {camera.isCameraActive && <div className="framing-status"><span/>{demo ? 'Sample session · no AI calls' : detector.present ? 'Looking good. Your runway is ready.' : 'Step back so your outfit fills the frame.'}</div>}
+        {configured === false && !demo && <p className="service-note">AI styling isn’t configured yet. Explore the demo to try the experience.</p>}
+        <button className="primary-action" disabled={camera.isStarting || (camera.isCameraActive && !demo && configured === false)} onClick={camera.isCameraActive ? begin : camera.startCamera}>
+          <Camera size={19}/>{camera.isStarting ? 'Waiting for camera…' : camera.isCameraActive ? 'Start my fit check' : 'Enable camera'}<ArrowUpRight size={20}/></button>
+        <button className="demo-action" onClick={camera.toggleTestMode}><Sparkles size={14}/>{demo ? 'Back to my camera' : 'Just looking? Try the demo'}</button>
+        <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Photos are sent to Google Gemini only during your session. We don’t store them.'}</p>
       </div>
-    </PhoneFrame>
-  );
+    </>}
+    {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
+    {stage === 'RECORDING' && <><LiveHeader viewerCount={live.viewerCount} remainingSeconds={DURATION-elapsed} totalDurationSeconds={DURATION} isMuted={muted} onToggleMute={() => setMuted(v=>!v)} onStop={reset}/>
+      <div className="audience-status" role="status">{status}</div><CoachingCue elapsedSeconds={elapsed} totalDurationSeconds={DURATION}/><LiveChat comments={live.comments}/><FloatingReactions reactions={live.reactions}/>
+      <ReactionBar onSendComment={text => addComment({ id: crypto.randomUUID(), username: 'you', avatarUrl: '/avatar.svg', comment: text, timestamp: Date.now(), badge: 'Host' })} onSendReaction={triggerReaction}/></>}
+    {stage === 'POSING' && <PosingScreen onCapturePhoto={capture} onFinishPosing={finish} onCancel={reset}/>}
+    {stage === 'ANALYZING' && <><ScannerOverlay snapshotUrl={snapshot} isDemo={demo}/>{error ? <div className="analysis-error" role="alert"><span className="eyebrow">LET’S TRY THAT AGAIN</span><h2>A small style pause.</h2><p>{error}</p><button className="primary-action" onClick={() => { analysisRef.current?.abort(); void finish(photos); }}>Retry analysis <RefreshCw size={17}/></button><button className="demo-action" onClick={() => { setError(null); setStage('POSING'); }}>Retake photos</button><button className="demo-action" onClick={reset}>Back to studio</button></div> : <button className="cancel-session" onClick={reset} aria-label="Cancel analysis"><X size={18}/></button>}</>}
+    {stage === 'RESULTS' && result && <StyleResults result={result} onReset={reset} onRetake={() => { setError(null); if (!demo) camera.startCamera(); setStage('POSING'); }}/>}
+  </div></PhoneFrame>;
 }
 
 export default App;

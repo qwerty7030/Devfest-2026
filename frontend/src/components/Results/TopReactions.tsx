@@ -35,7 +35,7 @@ export const TopReactions: React.FC<TopReactionsProps> = ({ comments }) => {
                 @{c.username}
               </span>
               <p className="text-zinc-300 italic text-[11px] leading-snug">
-                "{c.comment}"
+                &ldquo;{c.comment}&rdquo;
               </p>
             </div>
           </div>

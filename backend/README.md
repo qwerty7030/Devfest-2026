@@ -1,11 +1,7 @@
-# Fit Check — Backend Service
+# Backend
 
-This directory is reserved for the backend team working on **Fit Check**.
+The backend is implemented as Next.js routes in `app/api/`, served by the same process and origin as the frontend. Run `npm ci` and `npm run dev` from the repository root. Set `GEMINI_API_KEY` in `.env.local` for real AI requests.
 
-## Mission
-1. Ingest camera frames or a short video clip from the frontend client.
-2. Analyze the user's outfit using **Google Gemini Vision** (identifying garments, colors, fit, style archetype).
-3. Generate real-time or batched audience-style commentary (like Instagram Live comments) using a secondary LLM provider.
-4. Return structured fit check results and audience sentiment to the frontend.
+`POST /api/comments` generates outfit-aware live commentary. `POST /api/fitcheck/analyze` produces the final structured style report. `GET /api/health` reports configuration status. See [API_CONTRACT.md](./API_CONTRACT.md).
 
-For the exact request and response schemas, see [API_CONTRACT.md](./API_CONTRACT.md).
+The detector and original backend live hook remain under `lib/fitcheck/`; `/debug` exposes the backend diagnostic UI. The main studio uses its camera hook with the shared detector and a cancellable HTTP adapter. It does not open a second camera stream.

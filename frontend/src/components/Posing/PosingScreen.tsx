@@ -16,6 +16,7 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
   const [photos, setPhotos] = useState<string[]>([]);
   const [timerCount, setTimerCount] = useState<number | null>(null);
   const [isFlashing, setIsFlashing] = useState<boolean>(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const timerIntervalRef = useRef<number | null>(null);
 
   const currentPoseTarget = photos.length === 0 ? 1 : 2;
@@ -32,6 +33,7 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
   };
 
   const triggerSnap = () => {
+    if (photos.length >= 2) return;
     // Shutter sound
     soundEffects.playShutter();
 
@@ -41,8 +43,9 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
 
     const snapshot = onCapturePhoto();
     if (snapshot) {
-      setPhotos((prev) => [...prev, snapshot]);
-    }
+      setCaptureError(null);
+      setPhotos((prev) => [...prev, snapshot].slice(0, 2));
+    } else setCaptureError('Camera is not ready. Wait a moment and try again.');
   };
 
   // Start 3-second self-timer before snap
@@ -51,18 +54,18 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
     setTimerCount(3);
     soundEffects.playTick();
 
+    let remaining = 3;
     timerIntervalRef.current = window.setInterval(() => {
-      setTimerCount((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
+        remaining -= 1;
+        if (remaining <= 0) {
           if (timerIntervalRef.current) window.clearInterval(timerIntervalRef.current);
           timerIntervalRef.current = null;
           triggerSnap();
-          return null;
+          setTimerCount(null);
+          return;
         }
         soundEffects.playTick();
-        return prev - 1;
-      });
+        setTimerCount(remaining);
     }, 1000);
   };
 
@@ -129,6 +132,7 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
 
       {/* Bottom Controls & Gallery Thumbnails */}
       <div className="flex flex-col gap-3 z-20">
+        {captureError && <p role="alert" className="text-sm text-amber-200 text-center">{captureError}</p>}
         {/* Thumbnails strip */}
         <div className="flex items-center justify-center gap-3">
           {[0, 1].map((idx) => {
@@ -214,7 +218,7 @@ export const PosingScreen: React.FC<PosingScreenProps> = ({
               className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 active:scale-98 text-white font-black text-sm sm:text-base tracking-wide transition-all shadow-xl shadow-pink-500/30 flex items-center justify-center gap-2.5"
             >
               <Sparkles className="w-5 h-5" />
-              <span>GENERATE INSTAGRAM POST</span>
+              <span>GET MY STYLE REPORT</span>
             </button>
           </div>
         )}

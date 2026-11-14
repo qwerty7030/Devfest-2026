@@ -1,6 +1,7 @@
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { SYSTEM_PROMPT } from "@/lib/fitcheck/prompt";
 import type { CommentsRequest, CommentsResponse, Tone } from "@/lib/fitcheck/types";
+import { apiFailure, jpegFrame, readJson, ApiError } from "@/lib/fitcheck/validation";
 
 export const runtime = "nodejs";
 
@@ -88,11 +89,12 @@ function sanitize(raw: unknown): CommentsResponse {
 }
 
 export async function POST(req: Request) {
-  const input = parseBody(await req.json().catch(() => null));
-  if (!input) return Response.json({ error: "Expected { frame: base64 jpeg, recent?: string[] }" }, { status: 400 });
-
   const started = Date.now();
   try {
+    const input = parseBody(await readJson(req));
+    if (!input) throw new ApiError("Expected { frame: base64 jpeg, recent?: string[] }");
+    input.frame = jpegFrame(input.frame);
+    if (!process.env.GEMINI_API_KEY) throw new ApiError("AI styling is not configured. Try demo mode.", 503);
     const res = await client().models.generateContent({
       model: MODEL,
       contents: [
@@ -113,17 +115,18 @@ export async function POST(req: Request) {
         responseMimeType: "application/json",
         responseSchema,
         temperature: 1.0,
-        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+        maxOutputTokens: 1200,
+        abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(TIMEOUT_MS)]),
         ...(THINKING ? { thinkingConfig: { thinkingLevel: THINKING } } : {}),
       },
     });
 
     const out = sanitize(JSON.parse(res.text ?? "{}"));
     console.log(`[api/comments] ${MODEL} ${Date.now() - started}ms visible=${out.person_visible} n=${out.comments.length} rating=${out.rating ?? "-"}`);
-    return Response.json(out);
+    return Response.json(out, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     // Rate limits, safety blocks, timeouts, bad JSON: the client falls back to local filler.
     console.warn(`[api/comments] failed after ${Date.now() - started}ms:`, e instanceof Error ? e.message : e);
-    return Response.json(EMPTY);
+    return apiFailure(e);
   }
 }

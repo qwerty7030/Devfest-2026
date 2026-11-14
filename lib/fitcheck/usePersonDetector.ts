@@ -37,6 +37,9 @@ export function usePersonDetector(
 
   useEffect(() => {
     if (!enabled) return;
+    setPresent(false);
+    setReady(false);
+    setError(null);
     let detector: ObjectDetector | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
@@ -99,5 +102,5 @@ export function usePersonDetector(
     };
   }, [videoRef, enabled, intervalMs, enterHits, exitAfterMs, minHeightFraction, scoreThreshold]);
 
-  return { present, ready, error };
+  return { present: enabled && present, ready: enabled && ready, error: enabled ? error : null };
 }

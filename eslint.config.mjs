@@ -19,7 +19,13 @@ const eslintConfig = [
       "build/**",
       "next-env.d.ts",
       "public/mediapipe/**",
+      "frontend/node_modules/**",
+      "frontend/dist/**",
     ],
+  },
+  {
+    // Camera data URLs are local photos and must not go through an image proxy.
+    rules: { "@next/next/no-img-element": "off" },
   },
 ];
 
