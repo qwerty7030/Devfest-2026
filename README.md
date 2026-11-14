@@ -20,7 +20,7 @@ On PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if executio
 ## The experience
 
 1. Enable a camera or explore the demo. Mirror and front/back camera controls help frame the outfit; on-device MediaPipe detection supplies optional framing guidance. Partial outfits, upper-body views, and garment details work. Start never waits for person detection, full-body framing, or an AI configuration check.
-2. Start the three-second countdown, then a 15-second session. Gemini receives small JPEG frames for outfit-aware comments, delivered at a readable pace. Viewers and audience identities are simulated.
+2. Start the three-second countdown, then a 15-second session. Labeled simulated chatter starts immediately, including when AI is unconfigured or unavailable. Gemini receives small JPEG frames for outfit-aware comments, which take priority as they arrive. Viewers and audience identities are simulated; generic local comments carry a Simulated badge and Gemini comments carry an AI audience badge.
 3. Capture one or two photos, immediately or using the three-second timer.
 4. Generate a personal report: style score, archetype, visible garments, constructive styling notes, and AI crowd highlights. The first photo is analyzed; both photos remain available to save.
 5. Edit or copy the caption, save a photo, retake photos, or start again. Sharing invokes the browser share menu (or copies the caption). Nothing posts to Instagram or another social network.

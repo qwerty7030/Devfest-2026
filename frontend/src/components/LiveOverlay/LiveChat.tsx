@@ -14,7 +14,7 @@ export const LiveChat: React.FC<LiveChatProps> = ({ comments }) => {
   }, [comments]);
 
   return (
-    <div className="absolute bottom-20 left-0 right-16 z-20 max-h-[45vh] overflow-y-auto no-scrollbar pointer-events-auto px-4 pb-2 flex flex-col justify-end mask-radial">
+    <div role="log" aria-label="Live audience comments" aria-live="polite" aria-relevant="additions" className="absolute bottom-20 left-0 right-16 z-20 max-h-[45vh] overflow-y-auto no-scrollbar pointer-events-auto px-4 pb-2">
       {/* Soft gradient mask overlay */}
       <div className="flex flex-col gap-2">
         {comments.map((item) => (

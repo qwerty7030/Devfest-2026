@@ -14,6 +14,8 @@ Response: `{ "person_visible": true, "vibe": "relaxed utility", "rating": 8.5, "
 
 `vibe` and `rating` are optional; rating is 0–10. Tones are `hype`, `roast`, `question`, or `emoji`. Up to 12 comments are returned; text is capped at 150 characters. Only the last 20 recent comments are considered. No visible person produces an empty comment list. The client polls sequentially with a four-second delay after completion and paces comment display.
 
+The client shows generic local chatter immediately and while requests are pending, unavailable, or return no visible clothing. These comments are labeled **Simulated**, never attributed to Gemini or presented as outfit observations. Valid AI comments take delivery priority without discarding the previous batch. Stop cancels pending requests and all delivery timers. The status line distinguishes missing server configuration from a temporary reconnect.
+
 ## `POST /api/fitcheck/analyze`
 
 Request: `{ "snapshotBase64": "data:image/jpeg;base64,..." }`. Raw JPEG base64 also works. The client analyzes the first photo and retains the other photo locally.
