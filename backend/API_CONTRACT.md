@@ -8,7 +8,11 @@ Returns `{ "status": "ok", "aiConfigured": true }`. The boolean checks key prese
 
 ## `POST /api/comments`
 
-Request: `{ "frame": "<base64 JPEG without data prefix>", "recent": ["previous comment"] }`.
+Live request: `{ "clips": [{ "video": { "data": "<base64 WebM or MP4>", "mimeType": "video/webm" }, "durationMs": 2500 }], "knownItems": [{ "id": "jacket", "category": "Outerwear", "description": "Olive work jacket" }], "coveredParts": [{ "id": "jacket", "comments": 1 }], "recent": ["previous comment"] }`.
+
+Each request contains the latest one or two independently finalized clips, in chronological order, totaling at most eight seconds. The standard rolling window is two 2½-second clips. The browser prefers MP4/H.264, verified with the live provider. On browsers without supported MP4 recording, a clip contains `frames: [{ "frame": "<base64 JPEG>", "offsetMs": 0 }, ...]` with 2–6 ordered timestamped frames instead of `video`. WebM is accepted by the endpoint but is not selected by the browser because its live decoding was unreliable in validation. The backend diagnostic screen can still send a legacy single `frame`.
+
+Gemini receives native video inputs sampled at two frames per second, or the ordered frame sequence. It combines clear moments across each clip; no exact frame must contain the whole outfit. The prompt supplies the session's previous observations, per-piece comment counts, and recent comments. Existing item ids are reused when possible and newly revealed, under-discussed pieces receive priority. Caller-supplied memory is contextual input, not proof of current presence.
 
 Response example:
 
@@ -19,15 +23,15 @@ Response example:
   "vibe": "relaxed utility",
   "rating": 8.5,
   "comments": [
-    { "text": "The olive jacket gives the outfit a strong earthy layer.", "tone": "hype", "evidenceIds": ["jacket"], "suggestion": "" },
-    { "text": "The long jacket cuffs could use more definition.", "tone": "critique", "evidenceIds": ["jacket"], "suggestion": "Try rolling the cuffs once." }
+    { "text": "The olive jacket gives the outfit a strong earthy layer.", "tone": "hype", "aspect": "color", "evidenceIds": ["jacket"], "suggestion": "" },
+    { "text": "The long jacket cuffs could use more definition.", "tone": "critique", "aspect": "fit", "evidenceIds": ["jacket"], "suggestion": "Try rolling the cuffs once." }
   ]
 }
 ```
 
 `vibe` and `rating` are optional; rating is 0–10. The model observes visible pieces before generating comments. Tones are `hype` (specific praise) and `critique` (constructive styling criticism). Up to eight comments are returned, capped at 220 characters each. Every comment must reference an observed item's id, and critiques must include an actionable `suggestion`; invalid entries are dropped. The server alternates praise and critique. Only the last 20 recent comments are considered.
 
-No wearer or no observed clothing returns `person_visible: false`, `observations: []`, and `comments: []`. Upper-body views and cropped poses are valid. The client polls sequentially with a three-second delay after completion and delivers grounded comments every 1.1 seconds. It never emits canned comments in real mode, drops queued comments when no wearer is visible, and expires undelivered feedback after ten seconds. Missing keys and provider failures are visible status errors. Stop aborts requests and delivery timers. The runway timer waits for clothing observations and pauses when observations are lost.
+No wearer anywhere in the rolling window returns `person_visible: false`, `observations: []`, and `comments: []`. Upper-body views, turns, close-ups, and cropped poses are valid. Capture continues during inference with only one request in flight and a two-clip buffer, so slow requests cannot create an upload backlog. Grounded comments arrive every 1.1 seconds. Session memory merges recognized pieces across clips, prioritizes uncovered pieces, and suppresses repeated text and repeated item/tone/aspect feedback. Undelivered feedback expires after 15 seconds. No wearer clears queued comments but retains the recent outfit inventory. Missing keys and provider failures show status errors instead of canned hype. Stop aborts requests, recording, and delivery timers. The runway starts after initial recognition and then runs continuously for 15 seconds without freezing on an imperfect pose.
 
 ## `POST /api/fitcheck/analyze`
 
@@ -44,8 +48,8 @@ Client-side `capturedPhotos`, `capturedSnapshotUrl`, and `timestamp` are appende
 
 ## Limits and errors
 
-JPEGs must have a JPEG signature and be under 2,000,000 base64 characters. The actual request body stream is limited to 3 MB. The camera downsizes captures to at most 960 pixels wide and JPEG quality 0.78. Gemini deadlines are 12 seconds for commentary and 25 seconds for analysis; browser cancellation propagates to the model request.
+Each WebM/MP4 clip is limited to four million decoded bytes and 0.5–6 seconds, and its container signature is checked. At most two clips and eight seconds are accepted. The comments request stream is capped at 12 MB; ordinary 1 Mbps clips are substantially smaller. Hosts may impose lower body limits. JPEG fallback frames must have a JPEG signature and be under 2,000,000 base64 characters, with strictly increasing offsets. Photo analysis requests remain capped at 3 MB. The camera downsizes JPEG captures to at most 960 pixels wide and quality 0.78. Gemini deadlines are 12 seconds for commentary and 25 seconds for analysis; cancellation propagates to the model request.
 
-Failures use `{ "error": "A user-readable explanation" }`: 400 for malformed input, 413 for oversized payloads, 422 for no discernible outfit, 502 for incomplete analysis, and 503 for missing configuration or provider failure. Failed real sessions do not return sample scores. Demo mode uses only the client mock provider and is explicitly labeled.
+Failures use `{ "error": "A user-readable explanation" }`: 400 for malformed input, 413 for oversized payloads, 422 for no discernible outfit, 429 with `code: AI_QUOTA_EXHAUSTED` for exhausted Gemini quota, 502 for incomplete analysis, and 503 for missing configuration or provider failure. A quota failure pauses the clip collector and further model requests until a new session is started, preventing repeated calls to a blocked model. Failed real sessions do not return sample scores. Demo mode uses only the client mock provider and is explicitly labeled.
 
 Endpoints do not implement authentication or durable rate limiting. Restrict access or add an authenticated gateway and spending limits before a public launch.

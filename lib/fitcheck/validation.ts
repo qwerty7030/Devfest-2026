@@ -5,7 +5,7 @@ export class ApiError extends Error {
 }
 
 /** Bound the stream itself; Content-Length is optional and untrusted. */
-export async function readJson(req: Request): Promise<unknown> {
+export async function readJson(req: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   const reader = req.body?.getReader();
   if (!reader) throw new ApiError("A JSON body is required.");
   const chunks: Uint8Array[] = [];
@@ -15,9 +15,9 @@ export async function readJson(req: Request): Promise<unknown> {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) {
+      if (size > maxBytes) {
         await reader.cancel();
-        throw new ApiError("Photo is too large. Please retake it.", 413);
+        throw new ApiError("Camera input is too large. Please try again.", 413);
       }
       chunks.push(value);
     }
@@ -41,6 +41,9 @@ export function jpegFrame(value: unknown): string {
 
 export function apiFailure(e: unknown) {
   if (e instanceof ApiError) return Response.json({ error: e.message }, { status: e.status });
+  if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
+    return Response.json({ error: "Gemini's request quota is exhausted. Live analysis is paused; use a key/model with available quota or wait for it to reset.", code: 'AI_QUOTA_EXHAUSTED' }, { status: 429, headers: { 'Retry-After': '60' } });
+  }
   console.warn("[fitcheck] AI request failed:", e instanceof Error ? e.name : "Unknown error");
   return Response.json({ error: "The stylist is unavailable right now. Please try again." }, { status: 503 });
 }

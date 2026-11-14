@@ -8,6 +8,7 @@ import { useCamera } from './hooks/useCamera';
 import { useLiveReactions } from './hooks/useLiveReactions';
 import { usePersonDetector } from '../../lib/fitcheck/usePersonDetector';
 import { startLiveFeed, analyzeFit } from './services/apiProvider';
+import { createOutfitClipSource } from './services/clipCapture';
 import { mockFitCheckProvider } from './services/mockProvider';
 import { soundEffects } from './services/soundEffects';
 import { PhoneFrame } from './components/Layout/PhoneFrame';
@@ -39,7 +40,7 @@ export function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [observations, setObservations] = useState<OutfitObservation[]>([]);
   const camera = useCamera();
-  const { stopCamera } = camera;
+  const { stopCamera, videoRef } = camera;
   const live = useLiveReactions();
   const detector = usePersonDetector(camera.videoRef, camera.isCameraActive && !camera.isTestMode && stage === 'READY');
   const analysisRef = useRef<AbortController | null>(null);
@@ -63,21 +64,15 @@ export function App() {
     setElapsed(0);
     startViewerCounter();
     setStatus(demo ? 'Demo audience · sample reactions' : 'Connecting your AI audience…');
-    let outfitVisible = demo;
-    let visibleMs = 0;
-    let lastTick = Date.now();
+    let runwayStarted: number | null = demo ? Date.now() : null;
     let stop: () => void;
     if (demo) { mockFitCheckProvider.startLiveFeed(addComment, triggerReaction); stop = () => mockFitCheckProvider.stopLiveFeed(); }
-    else stop = startLiveFeed(capture, addComment, setStatus, items => {
+    else stop = startLiveFeed(createOutfitClipSource(() => videoRef.current, capture), addComment, setStatus, items => {
       setObservations(items);
-      outfitVisible = items.length > 0;
-      lastTick = Date.now();
+      if (items.length && runwayStarted === null) runwayStarted = Date.now();
     });
     const timer = setInterval(() => {
-      const now = Date.now();
-      if (outfitVisible) visibleMs += now - lastTick;
-      lastTick = now;
-      const seconds = Math.min(DURATION, Math.floor(visibleMs / 1000));
+      const seconds = runwayStarted === null ? 0 : Math.min(DURATION, Math.floor((Date.now() - runwayStarted) / 1000));
       setElapsed(seconds);
       if (seconds >= DURATION) {
         const photo = capture();
@@ -87,7 +82,7 @@ export function App() {
       }
     }, 200);
     return () => { clearInterval(timer); stop(); stopViewerCounter(); };
-  }, [stage, demo, capture, addComment, triggerReaction, startViewerCounter, stopViewerCounter]);
+  }, [stage, demo, capture, videoRef, addComment, triggerReaction, startViewerCounter, stopViewerCounter]);
 
   const reset = () => { analysisRef.current?.abort(); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setSnapshot(undefined); setStage('READY'); };
   const begin = () => { live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
@@ -128,13 +123,13 @@ export function App() {
           <Camera size={19}/>{camera.isCameraActive ? 'Start my fit check' : camera.isStarting ? 'Waiting for camera…' : 'Enable camera'}<ArrowUpRight size={20}/></button>
         {camera.isCameraActive && !demo && <button className="demo-action" aria-pressed={showGuide} onClick={() => setShowGuide(v => !v)}>{showGuide ? 'Hide optional framing guide' : 'Show optional framing guide'}</button>}
         <button className="demo-action" onClick={camera.toggleTestMode}><Sparkles size={14}/>{demo ? 'Back to my camera' : 'Just looking? Try the demo'}</button>
-        <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Photos are sent to Google Gemini only during your session. We don’t store them.'}</p>
+        <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Short camera clips go to Google Gemini during your session. We don’t store them.'}</p>
       </div>
     </>}
     {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
     {stage === 'RECORDING' && <><LiveHeader viewerCount={live.viewerCount} remainingSeconds={DURATION-elapsed} totalDurationSeconds={DURATION} isMuted={muted} onToggleMute={() => setMuted(v=>!v)} onStop={reset}/>
       <div className="audience-status" role="status">{status}</div><CoachingCue elapsedSeconds={elapsed} totalDurationSeconds={DURATION}/>
-      {!demo && <div className="outfit-observations" aria-label="Clothing detected by Gemini">{observations.length ? <><span>GEMINI SEES</span>{observations.map(item => <span key={item.id}>{item.description}</span>)}</> : <p>Stand in front of the camera. Feedback appears after Gemini can see what you’re wearing.</p>}</div>}
+      {!demo && <div className="outfit-observations" aria-label="Outfit pieces recognized across your live clip">{observations.length ? <><span>YOUR OUTFIT SO FAR</span>{observations.map(item => <span key={item.id}>{item.description}</span>)}</> : <p>Just stand in front of the camera and show off. We’re following your outfit as you move.</p>}</div>}
       <LiveChat comments={demo || observations.length > 0 ? live.comments : []}/><FloatingReactions reactions={live.reactions}/>
       <ReactionBar onSendComment={text => addComment({ id: crypto.randomUUID(), username: 'you', avatarUrl: '/avatar.svg', comment: text, timestamp: Date.now(), badge: 'Host' })} onSendReaction={triggerReaction}/></>}
     {stage === 'POSING' && <PosingScreen onCapturePhoto={capture} onFinishPosing={finish} onCancel={reset}/>}

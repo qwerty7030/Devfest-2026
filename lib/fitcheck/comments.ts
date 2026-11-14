@@ -28,7 +28,8 @@ export function sanitizeComments(raw: unknown): CommentsResponse {
     if (!text || !evidenceIds.length || (c.tone !== 'hype' && c.tone !== 'critique')) continue;
     if (c.tone === 'critique' && !suggestion) continue;
     if (comments.some(v => v.text.toLowerCase() === text.toLowerCase())) continue;
-    comments.push({ text, tone: c.tone, evidenceIds, suggestion: c.tone === 'critique' ? suggestion : '' });
+    const aspects = ['color', 'fit', 'layering', 'detail', 'pairing'];
+    comments.push({ text, tone: c.tone, evidenceIds, suggestion: c.tone === 'critique' ? suggestion : '', aspect: aspects.includes(c.aspect) ? c.aspect : 'detail' });
     if (comments.length >= 8) break;
   }
   // Alternate praise and actionable criticism so both arrive early in a short session.

@@ -1,6 +1,8 @@
 import type { FitResult, LiveComment } from '../types/fitCheck';
-import type { CommentsResponse, OutfitComment, OutfitObservation } from '../../../lib/fitcheck/types';
+import type { CommentsResponse, OutfitClip, OutfitObservation } from '../../../lib/fitcheck/types';
 import { randomUsername } from '../../../lib/fitcheck/fakeUsers';
+import type { OutfitClipSource } from './clipCapture';
+import { OutfitSession } from './outfitSession';
 
 export async function analyzeFit(photo: string, signal: AbortSignal): Promise<FitResult> {
   const res = await fetch('/api/fitcheck/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -10,72 +12,70 @@ export async function analyzeFit(photo: string, signal: AbortSignal): Promise<Fi
   return { ...body.data, capturedPhotos: [], timestamp: Date.now() };
 }
 
-/** Only Gemini feedback grounded in visible clothing enters a real session's chat. */
-export function startLiveFeed(capture: () => string | null, onComment: (c: LiveComment) => void,
+/** Capture continuously; analyze one complete clip at a time with a single latest-clip buffer. */
+export function startLiveFeed(source: OutfitClipSource, onComment: (c: LiveComment) => void,
   onStatus: (status: string) => void, onObservations: (items: OutfitObservation[]) => void = () => {}) {
   const controller = new AbortController();
-  const recent: string[] = [];
-  let timer: ReturnType<typeof setTimeout>;
-  let pending: { comment: OutfitComment; details: string; seenAt: number }[] = [];
-  let retryDelay = 3000;
-  const poll = async () => {
+  const session = new OutfitSession();
+  let latest: OutfitClip | null = null;
+  const window: OutfitClip[] = [];
+  let inFlight = false;
+  let quotaPaused = false;
+  let nextAllowed = 0;
+  let pumpTimer: ReturnType<typeof setTimeout> | undefined;
+  const schedule = () => {
+    if (controller.signal.aborted || quotaPaused || inFlight || !latest || pumpTimer) return;
+    pumpTimer = setTimeout(() => { pumpTimer = undefined; void pump(); }, Math.max(0, nextAllowed - Date.now()));
+  };
+  const pump = async () => {
+    if (controller.signal.aborted || inFlight || !latest) return;
+    const clips = [...window]; latest = null; inFlight = true;
     try {
-      const photo = capture();
-      if (!photo) { onStatus('Waiting for camera · stand in front of the lens'); return; }
       const res = await fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frame: photo.replace(/^data:image\/jpeg;base64,/, ''), recent: recent.slice(-15) }),
+        body: JSON.stringify({ clips, ...session.context() }),
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]) });
       if (!res.ok) {
         const failure = await res.json().catch(() => null);
-        throw new Error(typeof failure?.error === 'string' ? failure.error : 'AI feedback unavailable. Retrying…');
+        if (res.status === 429) {
+          session.clearPending();
+          onStatus(typeof failure?.error === 'string' ? failure.error : 'Gemini quota reached. Live analysis is paused.');
+          quotaPaused = true;
+          stopCapture();
+          latest = null;
+          window.length = 0;
+          return;
+        }
+        throw new Error(typeof failure?.error === 'string' ? failure.error : 'Outfit feedback is reconnecting…');
       }
       const data: CommentsResponse = await res.json();
       if (controller.signal.aborted) return;
-      const observations = Array.isArray(data.observations) ? data.observations.filter(i => i && typeof i.id === 'string' && typeof i.description === 'string') : [];
-      onObservations(data.person_visible ? observations : []);
-      if (!data.person_visible || !observations.length) {
-        pending = [];
-        onStatus('Stand in front of the camera with some clothing visible');
-        return;
-      }
-      const seenAt = Date.now();
-      const incoming = Array.isArray(data.comments) ? data.comments : [];
-      for (const c of incoming) {
-        if (!c || typeof c.text !== 'string' || !c.text.trim() || !Array.isArray(c.evidenceIds)) continue;
-        if (c.tone !== 'hype' && c.tone !== 'critique') continue;
-        if (c.tone === 'critique' && (typeof c.suggestion !== 'string' || !c.suggestion.trim())) continue;
-        const evidence = observations.filter(i => c.evidenceIds.includes(i.id));
-        if (!evidence.length || recent.includes(c.text) || pending.some(p => p.comment.text === c.text)) continue;
-        pending.push({ comment: c, details: evidence.map(i => i.description).join(' · '), seenAt });
-      }
-      pending = pending.filter(p => seenAt - p.seenAt < 10_000).slice(0, 12);
-      onStatus(pending.length ? 'Gemini sees your fit · compliments + constructive changes' : 'Looking closer at your outfit…');
+      const present = session.accept(data);
+      onObservations(session.inventory());
+      onStatus(present ? 'Following your outfit · fresh feedback as you show more' : 'Step into view and show off · your outfit is remembered');
+      nextAllowed = Date.now() + 200;
     } catch (e) {
       if (!controller.signal.aborted) {
-        pending = [];
-        onObservations([]);
-        const message = e instanceof Error ? e.message : 'AI feedback unavailable. Retrying…';
-        onStatus(/not configured/i.test(message) ? 'Gemini API key is missing on the server · no outfit feedback yet' : message);
-        if (/not configured/i.test(message)) retryDelay = 10_000;
+        const message = e instanceof Error ? e.message : 'Outfit feedback is reconnecting…';
+        onStatus(message);
+        nextAllowed = Date.now() + (/not configured/i.test(message) ? 10_000 : 2000);
       }
-    } finally {
-      if (!controller.signal.aborted) timer = setTimeout(poll, retryDelay);
-    }
+    } finally { inFlight = false; schedule(); }
   };
   const delivery = setInterval(() => {
     if (controller.signal.aborted) return;
-    pending = pending.filter(p => Date.now() - p.seenAt < 10_000);
-    const next = pending.shift();
+    const next = session.next();
     if (!next) return;
     const { comment: c, details } = next;
-    recent.push(c.text);
-    if (recent.length > 20) recent.shift();
     onComment({ id: crypto.randomUUID(), username: randomUsername(), avatarUrl: '/avatar.svg', comment: c.text,
       timestamp: Date.now(), badge: c.tone === 'critique' ? 'Try this' : 'Works well', tag: details,
       feedbackType: c.tone === 'critique' ? 'suggestion' : 'compliment', suggestion: c.suggestion || undefined });
   }, 1100);
   onObservations([]);
-  onStatus('Looking for your outfit · stand in front of the camera');
-  void poll();
-  return () => { controller.abort(); clearTimeout(timer); clearInterval(delivery); pending = []; };
+  onStatus('Show off naturally · watching the first moments of your outfit');
+  const stopCapture = source.start(clip => {
+    if (controller.signal.aborted || quotaPaused) return;
+    window.push(clip); if (window.length > 2) window.shift();
+    latest = clip; schedule();
+  }, onStatus);
+  return () => { controller.abort(); stopCapture(); clearTimeout(pumpTimer); clearInterval(delivery); latest = null; session.clearPending(); };
 }

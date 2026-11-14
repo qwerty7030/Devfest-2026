@@ -20,7 +20,7 @@ On PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if executio
 ## The experience
 
 1. Enable a camera or explore the demo. Mirror and front/back camera controls help frame the outfit; on-device MediaPipe detection supplies optional framing guidance. Partial outfits, upper-body views, and garment details work. Start never waits for person detection, full-body framing, or an AI configuration check.
-2. Start the three-second countdown and stand in front of the camera. Gemini receives JPEG frames and identifies visible clothing; detected pieces appear in the studio. The 15-second runway timer counts only while clothing has been observed. Partial outfits work; there is no full-body framing gate. Real sessions contain only Gemini feedback linked to detected pieces: specific compliments marked **Works well** and constructive criticism marked **Try this**, with a practical change and the clothing detail each refers to. No wearer means no comments; failures show a status message rather than canned hype. Viewers and audience identities are simulated.
+2. Start the three-second countdown, stand in front of the camera, and show off naturally. The app records silent 2½-second clips while Gemini analyzes the latest rolling five-second window. It remembers pieces as you turn or reveal details, so a top, bottoms, shoes, and accessories can be recognized at different moments. Newly revealed pieces get comments before repeated feedback on familiar ones. The 15-second runway starts when clothing is first recognized, then keeps moving through poses and brief gaps; there is no full-body framing gate. Real comments are specific compliments marked **Works well** or constructive changes marked **Try this**. A whole window without a wearer stops new comments. Viewers and audience identities are simulated.
 3. Capture one or two photos, immediately or using the three-second timer.
 4. Generate a personal report: style score, archetype, visible garments, constructive styling notes, and AI crowd highlights. The first photo is analyzed; both photos remain available to save.
 5. Edit or copy the caption, save a photo, retake photos, or start again. Sharing invokes the browser share menu (or copies the caption). Nothing posts to Instagram or another social network.
@@ -30,15 +30,16 @@ Camera failures, missing configuration, provider errors, unclear photos, and can
 ## Configuration
 
 - `GEMINI_API_KEY`: server-only key from Google AI Studio. Never use a `NEXT_PUBLIC_` prefix.
-- `GEMINI_MODEL`: defaults to `gemini-3.5-flash-lite`, inherited from the backend branch; availability depends on your key. `node scripts/list-models.mjs` lists accessible models.
+- `GEMINI_MODEL`: defaults to `gemini-3.5-flash`, verified with native short video input; availability and quota depend on your key. `node scripts/list-models.mjs` lists accessible models. Quota exhaustion pauses live capture/analysis and shows the actual issue; it is never presented as an inability to see clothing.
 - `GEMINI_THINKING`: `minimal`, `low`, `medium`, `high`, or `off`. Defaults to `low`; use `off` if your chosen model rejects thinking configuration.
 
-Only outfit styling is rated. Frames and the selected photo are sent to Google Gemini during an explicitly started real session. This app does not persist photos, comments, or reports to a database. They stay in browser memory until reset or reload; saved downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
+Only outfit styling is rated. Short silent clips and the selected results photo are sent to Google Gemini during an explicitly started real session. Clips stay in a bounded in-memory buffer and are discarded as newer clips arrive; no audio is captured. Browsers without supported video recording send a short timestamped sequence of camera frames instead. This app does not persist clips, photos, comments, or reports to a database. Session data stays in browser memory until reset or reload; saved downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
 
 ## Project layout
 
 - `app/`: Next.js entry page, layout, API routes, and backend debug screen at `/debug`.
 - `frontend/src/`: React studio, camera/posing/live components, client API adapter, and explicit demo provider.
+- `frontend/src/services/clipCapture.ts`: complete MP4 clip capture, with ordered-frame fallback where H.264 recording is unsupported; `outfitSession.ts` maintains session inventory, coverage, and duplicate suppression.
 - `lib/fitcheck/`: person detection, existing backend live hook, prompts, image validation, and result sanitization.
 - `public/models/`: local detector model; MediaPipe WASM is copied to `public/mediapipe/` by `npm ci`.
 - `backend/API_CONTRACT.md`: the implemented REST contract. No separate backend process or WebSocket server is needed.

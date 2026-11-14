@@ -2,7 +2,8 @@ import { Type } from '@google/genai';
 import { SYSTEM_PROMPT } from '@/lib/fitcheck/prompt';
 import { gemini, model, thinkingConfig } from '@/lib/fitcheck/gemini';
 import { sanitizeComments } from '@/lib/fitcheck/comments';
-import { apiFailure, jpegFrame, readJson, ApiError } from '@/lib/fitcheck/validation';
+import { apiFailure, readJson, ApiError } from '@/lib/fitcheck/validation';
+import { clipParts, knownOutfit, MAX_CLIP_BODY_BYTES } from '@/lib/fitcheck/clipInput';
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
@@ -16,20 +17,23 @@ const responseSchema = {
     }, required: ['id', 'category', 'description'] } },
     comments: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
       text: string, tone: { type: Type.STRING, enum: ['hype', 'critique'] },
+      aspect: { type: Type.STRING, enum: ['color', 'fit', 'layering', 'detail', 'pairing'] },
       evidenceIds: { type: Type.ARRAY, items: string }, suggestion: string,
-    }, required: ['text', 'tone', 'evidenceIds', 'suggestion'] } },
+    }, required: ['text', 'tone', 'aspect', 'evidenceIds', 'suggestion'] } },
   }, required: ['person_visible', 'observations', 'comments'],
 };
 
 export async function POST(req: Request) {
   try {
-    const body = await readJson(req) as Record<string, unknown> | null;
-    const frame = jpegFrame(body?.frame);
+    const body = await readJson(req, MAX_CLIP_BODY_BYTES) as Record<string, unknown> | null;
+    const media = clipParts(body);
+    const knownItems = knownOutfit(body?.knownItems);
+    const coveredParts = Array.isArray(body?.coveredParts) ? body.coveredParts.slice(0, 10).flatMap(p => p && typeof p.id === 'string' && typeof p.comments === 'number' ? [{ id: p.id.slice(0, 30), comments: Math.min(100, Math.max(0, p.comments)) }] : []) : [];
     const recent = Array.isArray(body?.recent)
       ? body.recent.filter((v): v is string => typeof v === 'string').slice(-20).map(v => v.slice(0, 220)) : [];
     const response = await gemini().models.generateContent({ model: model(), contents: [{ role: 'user', parts: [
-      { inlineData: { mimeType: 'image/jpeg', data: frame } },
-      { text: `Observe what this person is wearing now. Identify visible pieces, then give specific compliments and constructive changes.${recent.length ? `\nDo not repeat these earlier comments: ${JSON.stringify(recent)}` : ''}` },
+      ...media,
+      { text: `Watch this short outfit clip as a sequence, combining its clear moments. Identify the important visible pieces across the whole clip, even if no single frame contains the full outfit. Give unique feedback about different parts.\nEarlier confirmed pieces (reuse their ids when the same item reappears; they do not establish current presence): ${JSON.stringify(knownItems)}\nComment coverage so far (prioritize pieces with fewer comments, especially newly revealed shoes, bottoms and accessories): ${JSON.stringify(coveredParts)}${recent.length ? `\nAlready shown; do not repeat or paraphrase these points: ${JSON.stringify(recent)}` : ''}` },
     ] }], config: {
       systemInstruction: SYSTEM_PROMPT, responseMimeType: 'application/json', responseSchema,
       temperature: .7, maxOutputTokens: 2600, ...thinkingConfig(),

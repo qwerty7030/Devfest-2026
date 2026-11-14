@@ -74,4 +74,12 @@ export interface OutfitComment {
   tone: "hype" | "critique";
   evidenceIds: string[];
   suggestion: string;
+  aspect?: 'color' | 'fit' | 'layering' | 'detail' | 'pairing';
+}
+
+/** A complete short video, or an ordered camera-frame sequence on older browsers. */
+export interface OutfitClip {
+  video?: { data: string; mimeType: 'video/webm' | 'video/mp4' };
+  frames?: { frame: string; offsetMs: number }[];
+  durationMs: number;
 }
