@@ -15,11 +15,11 @@ npm run dev
 
 On PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if execution policy blocks `npm`. Open http://localhost:3000.
 
-**No key?** Choose **Try the demo**. This uses a virtual camera and clearly labeled sample reactions and reports, with no AI requests. A real camera session requires a configured key. Camera permission is requested only when you choose Enable camera.
+**No key?** Choose **Try the demo** for sample reactions and reports with no AI requests. You can also start a real camera session and take photos without a key; AI comments and reports require a configured key. Camera permission is requested only when you choose Enable camera.
 
 ## The experience
 
-1. Enable a camera or explore the demo. Mirror and front/back camera controls help frame the outfit; on-device MediaPipe detection supplies framing guidance.
+1. Enable a camera or explore the demo. Mirror and front/back camera controls help frame the outfit; on-device MediaPipe detection supplies optional framing guidance. Partial outfits, upper-body views, and garment details work. Start never waits for person detection, full-body framing, or an AI configuration check.
 2. Start the three-second countdown, then a 15-second session. Gemini receives small JPEG frames for outfit-aware comments, delivered at a readable pace. Viewers and audience identities are simulated.
 3. Capture one or two photos, immediately or using the three-second timer.
 4. Generate a personal report: style score, archetype, visible garments, constructive styling notes, and AI crowd highlights. The first photo is analyzed; both photos remain available to save.

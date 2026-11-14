@@ -35,7 +35,12 @@ export function useCamera() {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
         if (current !== generation.current) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
-        if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          // Some browsers leave play() pending even while the preview is visible.
+          // Camera access, rather than playback or outfit detection, enables Start.
+          void videoRef.current.play().catch(() => {});
+        }
         if (current !== generation.current) return;
         setHasPermission(true);
         setIsCameraActive(true);

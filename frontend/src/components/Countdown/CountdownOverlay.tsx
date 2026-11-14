@@ -12,6 +12,6 @@ export function CountdownOverlay({ onComplete, seconds = 3 }: { onComplete: () =
   return <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center" role="status">
     <span className="text-xs tracking-[.3em] uppercase text-pink-200">Your moment starts in</span>
     <span className="text-[150px] leading-tight font-black text-white">{count || 'GO'}</span>
-    <span className="rounded-full border border-white/20 bg-black/40 px-5 py-3 text-sm">Step back. Find your light. Own it.</span>
+    <span className="rounded-full border border-white/20 bg-black/40 px-5 py-3 text-sm">Find your light. Show any part of your fit.</span>
   </div>;
 }

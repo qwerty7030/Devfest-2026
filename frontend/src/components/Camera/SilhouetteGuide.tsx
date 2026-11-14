@@ -12,7 +12,7 @@ export const SilhouetteGuide: React.FC<SilhouetteGuideProps> = ({ visible }) => 
       {/* Top Banner Guide */}
       <div className="bg-black/60 backdrop-blur-md border border-white/20 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-medium tracking-wide flex items-center gap-2 shadow-xl animate-bounce">
         <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-ping" />
-        <span>Step back until your entire fit is framed</span>
+        <span>Optional guide — partial outfits work too</span>
       </div>
 
       {/* Human Silhouette Outline */}
@@ -52,7 +52,7 @@ export const SilhouetteGuide: React.FC<SilhouetteGuideProps> = ({ visible }) => 
 
       {/* Foot alignment baseline */}
       <div className="text-white/60 text-[11px] font-mono tracking-widest uppercase bg-black/40 px-3 py-1 rounded-md backdrop-blur-sm border border-white/10">
-        Align Shoes to Baseline
+        Use any comfortable framing
       </div>
     </div>
   );

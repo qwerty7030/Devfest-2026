@@ -7,17 +7,17 @@ interface CoachingCueProps {
 }
 
 export const CoachingCue: React.FC<CoachingCueProps> = ({ elapsedSeconds }) => {
-  let text = 'Show your full outfit';
+  let text = 'Show any part of your outfit';
   let icon = <UserCheck className="w-4 h-4 text-pink-400" />;
-  let phaseName = 'FULL SILHOUETTE';
+  let phaseName = 'YOUR FIT';
 
   if (elapsedSeconds < 4) {
     phaseName = 'STAGE 1 / 4';
-    text = 'Step back & show full silhouette 🚶';
+    text = 'Show your fit — any framing works';
     icon = <UserCheck className="w-4 h-4 text-pink-400" />;
   } else if (elapsedSeconds < 8) {
     phaseName = 'STAGE 2 / 4';
-    text = 'Hit a slow 360° turn 🔄';
+    text = 'Try another angle if you like';
     icon = <RotateCw className="w-4 h-4 text-purple-400 animate-spin" />;
   } else if (elapsedSeconds < 12) {
     phaseName = 'STAGE 3 / 4';

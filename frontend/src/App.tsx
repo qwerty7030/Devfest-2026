@@ -35,7 +35,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('Connecting your AI audience…');
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
   const camera = useCamera();
+  const { stopCamera } = camera;
   const live = useLiveReactions();
   const detector = usePersonDetector(camera.videoRef, camera.isCameraActive && !camera.isTestMode && stage === 'READY');
   const analysisRef = useRef<AbortController | null>(null);
@@ -48,8 +50,8 @@ export function App() {
   }, []);
   useEffect(() => () => analysisRef.current?.abort(), []);
   useEffect(() => {
-    if (stage === 'RESULTS') camera.stopCamera();
-  }, [stage, camera.stopCamera]);
+    if (stage === 'RESULTS') stopCamera();
+  }, [stage, stopCamera]);
 
   const { addComment, triggerReaction, startViewerCounter, stopViewerCounter } = live;
   const capture = camera.captureSnapshot;
@@ -103,16 +105,17 @@ export function App() {
         <button onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera" title="Switch camera"><RefreshCw size={17}/></button>
         <button onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'} title={muted ? 'Enable sound' : 'Mute sound'}>{muted ? <VolumeX size={17}/> : <Volume2 size={17}/>}</button>
       </div></div>
-      {(camera.isCameraActive || demo) && <SilhouetteGuide visible={!demo}/>}
+      {(camera.isCameraActive || demo) && <SilhouetteGuide visible={!demo && showGuide}/>}
       {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome">
         <div className="viewfinder"><span/><Camera size={38} strokeWidth={1}/><span/></div>
-        <span className="eyebrow">A SPACE FOR YOUR STYLE</span><h2>Let’s see<br/>the whole fit.</h2><p>Find good light. Step into frame.<br/>We’ll bring the hype.</p>
+        <span className="eyebrow">A SPACE FOR YOUR STYLE</span><h2>Show us<br/>your style.</h2><p>A full outfit or just a detail.<br/>Start wherever you are.</p>
       </div>}
       <div className="studio-controls">
-        {camera.isCameraActive && <div className="framing-status"><span/>{demo ? 'Sample session · no AI calls' : detector.present ? 'Looking good. Your runway is ready.' : 'Step back so your outfit fills the frame.'}</div>}
-        {configured === false && !demo && <p className="service-note">AI styling isn’t configured yet. Explore the demo to try the experience.</p>}
-        <button className="primary-action" disabled={camera.isStarting || (camera.isCameraActive && !demo && configured === false)} onClick={camera.isCameraActive ? begin : camera.startCamera}>
-          <Camera size={19}/>{camera.isStarting ? 'Waiting for camera…' : camera.isCameraActive ? 'Start my fit check' : 'Enable camera'}<ArrowUpRight size={20}/></button>
+        {camera.isCameraActive && <div className="framing-status"><span/>{demo ? 'Sample session · no AI calls' : detector.present ? 'Ready when you are. Partial outfits work too.' : 'Start anytime. We’ll review what’s visible.'}</div>}
+        {configured === false && !demo && <p className="service-note">You can start and take photos. AI reviews need a server API key.</p>}
+        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>
+          <Camera size={19}/>{camera.isCameraActive ? 'Start my fit check' : camera.isStarting ? 'Waiting for camera…' : 'Enable camera'}<ArrowUpRight size={20}/></button>
+        {camera.isCameraActive && !demo && <button className="demo-action" aria-pressed={showGuide} onClick={() => setShowGuide(v => !v)}>{showGuide ? 'Hide optional framing guide' : 'Show optional framing guide'}</button>}
         <button className="demo-action" onClick={camera.toggleTestMode}><Sparkles size={14}/>{demo ? 'Back to my camera' : 'Just looking? Try the demo'}</button>
         <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Photos are sent to Google Gemini only during your session. We don’t store them.'}</p>
       </div>

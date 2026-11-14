@@ -28,7 +28,7 @@ export function startLiveFeed(capture: () => string | null, onComment: (c: LiveC
       const data: CommentsResponse = await res.json();
       if (controller.signal.aborted) return;
       pending = data.person_visible ? data.comments.map(c => c.text) : [];
-      onStatus(data.person_visible ? 'AI audience · simulated viewers' : 'Step into frame for outfit reactions');
+      onStatus(data.person_visible ? 'AI audience · simulated viewers' : 'Show any part of your outfit for AI reactions');
     } catch {
       if (!controller.signal.aborted) onStatus('Live reactions offline · you can still take photos');
     } finally {

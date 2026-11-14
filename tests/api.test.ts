@@ -56,7 +56,7 @@ test('unconfigured AI is an explicit 503, never a fake successful review', async
   }
 });
 
-test('analysis route sends the photo to Gemini and returns sanitized structured results', async () => {
+test('analysis accepts a single visible garment and asks Gemini to allow partial framing', async () => {
   const originalFetch = globalThis.fetch;
   const key = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = 'unit-test-key';
@@ -77,6 +77,8 @@ test('analysis route sends the photo to Gemini and returns sanitized structured 
     assert.equal(data.source, 'ai');
     assert.equal(data.garments[0].description, 'Olive jacket');
     assert.match(sent, /\/9j\/AA==/);
+    assert.match(sent, /do not require a face, full body, shoes, or multiple garments/);
+    assert.equal(data.garments.length, 1);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   } finally {
     globalThis.fetch = originalFetch;

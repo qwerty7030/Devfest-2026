@@ -25,10 +25,10 @@ export function usePersonDetector(
   enabled: boolean,
   {
     intervalMs = 200,
-    enterHits = 3,
-    exitAfterMs = 2000,
-    minHeightFraction = 0.25,
-    scoreThreshold = 0.5,
+    enterHits = 2,
+    exitAfterMs = 3500,
+    minHeightFraction = 0.1,
+    scoreThreshold = 0.3,
   }: DetectorOptions = {},
 ) {
   const [present, setPresent] = useState(false);
