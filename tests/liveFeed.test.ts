@@ -41,7 +41,7 @@ test('one in-flight request and a bounded rolling window retain the newest two c
     input.send(clip('first')); t.mock.timers.tick(0); assert.equal(sent.length, 1);
     input.send(clip('second')); input.send(clip('third')); input.send(clip('fourth'));
     t.mock.timers.tick(100); assert.equal(sent.length, 1, 'no overlapping model calls');
-    respond(response()); await flush(); t.mock.timers.tick(200);
+    respond(response()); await flush(); t.mock.timers.tick(10_000);
     assert.equal(sent.length, 2);
     assert.deepEqual(sent[1].clips.map(c => c.video?.data), ['third', 'fourth']);
   } finally { stop(); globalThis.fetch = original; }
@@ -70,8 +70,9 @@ test('an empty clip stops queued comments without forgetting pieces shown earlie
   const stop = startLiveFeed(input.source, c => comments.push(c), () => {}, items => { visible = items; });
   try {
     input.send(); t.mock.timers.tick(0); await flush();
-    input.send(clip('empty')); t.mock.timers.tick(200); await flush(); t.mock.timers.tick(2200);
-    assert.equal(comments.length, 0); assert.deepEqual(visible, [observation]);
+    input.send(clip('empty')); t.mock.timers.tick(10_000); await flush();
+    const count = comments.length; t.mock.timers.tick(2200);
+    assert.equal(comments.length, count); assert.deepEqual(visible, [observation]);
   } finally { stop(); globalThis.fetch = original; }
 });
 
@@ -109,4 +110,27 @@ test('quota exhaustion pauses capture and stops repeated requests to a blocked m
     assert.equal(input.stopped(), true); assert.match(statuses.at(-1)!, /quota exhausted/);
     input.send(); t.mock.timers.tick(60_000); await flush(); assert.equal(requests, 1);
   } finally { stop(); globalThis.fetch = original; }
+});
+
+test('two successful analyses are the hard cap even if the camera keeps collecting clips for minutes', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  const original = globalThis.fetch; const starts: number[] = [];
+  globalThis.fetch = async () => { starts.push(Date.now()); return response(); };
+  const input = manualSource(); const stop = startLiveFeed(input.source, () => {}, () => {});
+  try {
+    input.send(); t.mock.timers.tick(0); await flush();
+    input.send(); t.mock.timers.tick(9999); await flush(); assert.equal(starts.length, 1);
+    t.mock.timers.tick(1); await flush(); assert.equal(starts.length, 2);
+    assert.equal(starts[1] - starts[0], 10_000); assert.equal(input.stopped(), true);
+    for (let i = 0; i < 30; i++) { input.send(); t.mock.timers.tick(10_000); await flush(); }
+    assert.equal(starts.length, 2);
+  } finally { stop(); globalThis.fetch = original; }
+});
+
+test('camera collection ends after thirty seconds even if no model response ever recognizes an outfit', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] });
+  const original = globalThis.fetch; globalThis.fetch = async () => new Promise<Response>(() => {});
+  const input = manualSource(); const stop = startLiveFeed(input.source, () => {}, () => {});
+  try { input.send(); t.mock.timers.tick(0); t.mock.timers.tick(30_000); assert.equal(input.stopped(), true); }
+  finally { stop(); globalThis.fetch = original; }
 });

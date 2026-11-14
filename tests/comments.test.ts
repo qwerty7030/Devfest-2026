@@ -30,7 +30,7 @@ test('the comments route sends the actual camera JPEG and asks Gemini for observ
     return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ person_visible: true, observations: [observation], comments: [praise, critique] }) }] } }] });
   };
   try {
-    const result = await POST(new Request('http://localhost/api/comments', { method: 'POST', body: JSON.stringify({ frame: '/9j/AA==', recent: [] }) }));
+    const result = await POST(new Request('http://localhost/api/comments', { method: 'POST', body: JSON.stringify({ frame: '/9j/AA==', recent: [], sessionId: crypto.randomUUID(), requestId: crypto.randomUUID() }) }));
     assert.equal(result.status, 200);
     const data = await result.json(); assert.equal(data.comments.length, 2); assert.equal(data.observations[0].description, observation.description);
     assert.match(sent, /\/9j\/AA==/); assert.match(sent, /Observe first/); assert.match(sent, /practical change/);
@@ -48,10 +48,27 @@ test('the live endpoint sends short videos plus outfit memory and coverage conte
     const data = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0]).toString('base64');
     const result = await POST(new Request('http://localhost/api/comments', { method: 'POST', body: JSON.stringify({
       clips: [{ video: { data, mimeType: 'video/webm' }, durationMs: 2500 }],
+      sessionId: crypto.randomUUID(), requestId: crypto.randomUUID(),
       knownItems: [observation], coveredParts: [{ id: 'tee', comments: 2 }], recent: [praise.text],
     }) }));
     assert.equal(result.status, 200);
     assert.match(sent, /video\/webm/); assert.match(sent, /Navy T-shirt/); assert.match(sent, /Comment coverage so far/);
     assert.match(sent, /across the whole clip/); assert.match(sent, /do not repeat or paraphrase/);
+  } finally { globalThis.fetch = original; if (key === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = key; }
+});
+
+test('replayed and concurrent copies of the same request cause exactly one provider call', async () => {
+  const key = process.env.GEMINI_API_KEY; const original = globalThis.fetch;
+  process.env.GEMINI_API_KEY = 'unit-test-key'; let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ person_visible: true, observations: [observation], comments: [praise, critique] }) }] } }] });
+  };
+  const body = { frame: '/9j/AA==', sessionId: crypto.randomUUID(), requestId: crypto.randomUUID() };
+  const request = () => new Request('http://localhost/api/comments', { method: 'POST', body: JSON.stringify(body) });
+  try {
+    const responses = await Promise.all([POST(request()), POST(request()), POST(request())]);
+    assert.ok(responses.every(r => r.status === 200)); assert.equal(calls, 1);
+    assert.equal((await POST(request())).status, 200); assert.equal(calls, 1);
   } finally { globalThis.fetch = original; if (key === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = key; }
 });

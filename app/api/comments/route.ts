@@ -1,6 +1,6 @@
 import { Type } from '@google/genai';
 import { SYSTEM_PROMPT } from '@/lib/fitcheck/prompt';
-import { gemini, model, thinkingConfig } from '@/lib/fitcheck/gemini';
+import { generateFitContent, model, thinkingConfig } from '@/lib/fitcheck/gemini';
 import { sanitizeComments } from '@/lib/fitcheck/comments';
 import { apiFailure, readJson, ApiError } from '@/lib/fitcheck/validation';
 import { clipParts, knownOutfit, MAX_CLIP_BODY_BYTES } from '@/lib/fitcheck/clipInput';
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     const coveredParts = Array.isArray(body?.coveredParts) ? body.coveredParts.slice(0, 10).flatMap(p => p && typeof p.id === 'string' && typeof p.comments === 'number' ? [{ id: p.id.slice(0, 30), comments: Math.min(100, Math.max(0, p.comments)) }] : []) : [];
     const recent = Array.isArray(body?.recent)
       ? body.recent.filter((v): v is string => typeof v === 'string').slice(-20).map(v => v.slice(0, 220)) : [];
-    const response = await gemini().models.generateContent({ model: model(), contents: [{ role: 'user', parts: [
+    const response = await generateFitContent('live', body, { model: model(), contents: [{ role: 'user', parts: [
       ...media,
       { text: `Watch this short outfit clip as a sequence, combining its clear moments. Identify the important visible pieces across the whole clip, even if no single frame contains the full outfit. Give unique feedback about different parts.\nEarlier confirmed pieces (reuse their ids when the same item reappears; they do not establish current presence): ${JSON.stringify(knownItems)}\nComment coverage so far (prioritize pieces with fewer comments, especially newly revealed shoes, bottoms and accessories): ${JSON.stringify(coveredParts)}${recent.length ? `\nAlready shown; do not repeat or paraphrase these points: ${JSON.stringify(recent)}` : ''}` },
     ] }], config: {

@@ -44,6 +44,8 @@ export function App() {
   const live = useLiveReactions();
   const detector = usePersonDetector(camera.videoRef, camera.isCameraActive && !camera.isTestMode && stage === 'READY');
   const analysisRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef('');
+  const reportRequestRef = useRef<{ photo: string; id: string } | null>(null);
 
   useEffect(() => { soundEffects.setMuted(muted); }, [muted]);
   useEffect(() => {
@@ -65,12 +67,13 @@ export function App() {
     startViewerCounter();
     setStatus(demo ? 'Demo audience · sample reactions' : 'Connecting your AI audience…');
     let runwayStarted: number | null = demo ? Date.now() : null;
+    if (!sessionIdRef.current) sessionIdRef.current = crypto.randomUUID();
     let stop: () => void;
     if (demo) { mockFitCheckProvider.startLiveFeed(addComment, triggerReaction); stop = () => mockFitCheckProvider.stopLiveFeed(); }
     else stop = startLiveFeed(createOutfitClipSource(() => videoRef.current, capture), addComment, setStatus, items => {
       setObservations(items);
       if (items.length && runwayStarted === null) runwayStarted = Date.now();
-    });
+    }, sessionIdRef.current);
     const timer = setInterval(() => {
       const seconds = runwayStarted === null ? 0 : Math.min(DURATION, Math.floor((Date.now() - runwayStarted) / 1000));
       setElapsed(seconds);
@@ -85,7 +88,7 @@ export function App() {
   }, [stage, demo, capture, videoRef, addComment, triggerReaction, startViewerCounter, stopViewerCounter]);
 
   const reset = () => { analysisRef.current?.abort(); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setSnapshot(undefined); setStage('READY'); };
-  const begin = () => { live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
+  const begin = () => { sessionIdRef.current = crypto.randomUUID(); reportRequestRef.current = null; live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
   const countdownFinished = useCallback(() => setStage('RECORDING'), []);
   const finish = async (taken: string[]) => {
     if (!taken.length || analysisRef.current && !analysisRef.current.signal.aborted && stage === 'ANALYZING') return;
@@ -94,7 +97,8 @@ export function App() {
     analysisRef.current = ctrl;
     setPhotos(taken); setSnapshot(taken[0]); setStage('ANALYZING'); setError(null);
     try {
-      const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(taken[0], ctrl.signal);
+      if (!reportRequestRef.current || reportRequestRef.current.photo !== taken[0]) reportRequestRef.current = { photo: taken[0], id: crypto.randomUUID() };
+      const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(taken[0], ctrl.signal, sessionIdRef.current, reportRequestRef.current.id);
       if (ctrl.signal.aborted) return;
       setResult({ ...data, source: demo ? 'demo' : 'ai', capturedPhotos: taken, capturedSnapshotUrl: taken[0] });
       setStage('RESULTS');
@@ -134,7 +138,7 @@ export function App() {
       <ReactionBar onSendComment={text => addComment({ id: crypto.randomUUID(), username: 'you', avatarUrl: '/avatar.svg', comment: text, timestamp: Date.now(), badge: 'Host' })} onSendReaction={triggerReaction}/></>}
     {stage === 'POSING' && <PosingScreen onCapturePhoto={capture} onFinishPosing={finish} onCancel={reset}/>}
     {stage === 'ANALYZING' && <><ScannerOverlay snapshotUrl={snapshot} isDemo={demo}/>{error ? <div className="analysis-error" role="alert"><span className="eyebrow">LET’S TRY THAT AGAIN</span><h2>A small style pause.</h2><p>{error}</p><button className="primary-action" onClick={() => { analysisRef.current?.abort(); void finish(photos); }}>Retry analysis <RefreshCw size={17}/></button><button className="demo-action" onClick={() => { setError(null); setStage('POSING'); }}>Retake photos</button><button className="demo-action" onClick={reset}>Back to studio</button></div> : <button className="cancel-session" onClick={reset} aria-label="Cancel analysis"><X size={18}/></button>}</>}
-    {stage === 'RESULTS' && result && <StyleResults result={result} onReset={reset} onRetake={() => { setError(null); if (!demo) camera.startCamera(); setStage('POSING'); }}/>}
+    {stage === 'RESULTS' && result && <StyleResults result={result} onReset={reset} onRetake={() => { sessionIdRef.current = crypto.randomUUID(); reportRequestRef.current = null; setError(null); if (!demo) camera.startCamera(); setStage('POSING'); }} />}
   </div></PhoneFrame>;
 }
 

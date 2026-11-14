@@ -10,7 +10,7 @@ test('rolling clip windows become chronological video inputs, not isolated JPEG 
   const parts = clipParts({ clips: [clip, clip] });
   assert.equal(parts.length, 4);
   assert.equal(parts[1].inlineData?.mimeType, 'video/webm');
-  assert.equal(parts[1].videoMetadata?.fps, 2);
+  assert.equal(parts[1].videoMetadata?.fps, 1);
   assert.match(parts[2].text!, /clip 2 of 2/);
 });
 

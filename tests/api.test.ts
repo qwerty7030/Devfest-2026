@@ -6,7 +6,7 @@ import { POST as analyze } from '../app/api/fitcheck/analyze/route';
 import { POST as comments } from '../app/api/comments/route';
 
 const jpeg = '/9j/AA==';
-const request = (body: unknown) => new Request('http://localhost/api', { method: 'POST', body: JSON.stringify(body) });
+const request = (body: unknown) => new Request('http://localhost/api', { method: 'POST', body: JSON.stringify({ ...(body as object), sessionId: crypto.randomUUID(), requestId: crypto.randomUUID() }) });
 
 test('JPEG parsing supports camera data URLs and rejects arbitrary text, wrong formats and oversized photos', () => {
   assert.equal(jpegFrame(`data:image/jpeg;base64,${jpeg}`), jpeg);

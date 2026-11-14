@@ -35,6 +35,16 @@ Camera failures, missing configuration, provider errors, unclear photos, and can
 
 Only outfit styling is rated. Short silent clips and the selected results photo are sent to Google Gemini during an explicitly started real session. Clips stay in a bounded in-memory buffer and are discarded as newer clips arrive; no audio is captured. Browsers without supported video recording send a short timestamped sequence of camera frames instead. This app does not persist clips, photos, comments, or reports to a database. Session data stays in browser memory until reset or reload; saved downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
 
+## Request budgets and cooldowns
+
+An ordinary fit check can make at most **two live Gemini attempts, at least ten seconds apart, and one final report attempt**. Comments from those batches are paced locally; each displayed comment does not make a model call. Collection stops after two checks or 30 seconds even if no outfit is recognized. Hidden tabs do not start new live requests. Explicit retakes start a new manual analysis session and still obey the shared limits.
+
+Both endpoints enforce a shared ceiling of **four provider calls per rolling minute** and **100 per Pacific calendar day**, with one provider call in flight. Configure `GEMINI_APP_REQUESTS_PER_MINUTE` and `GEMINI_APP_REQUESTS_PER_DAY` at or below the actual Google project limits, then restart. Google also applies token limits and counts usage from other apps in the same project, which this app cannot measure.
+
+Only session/request identifiers and counters are persisted in ignored `data/.runtime/`; API keys, images, videos, and model responses are not written there. The file lock coordinates local server processes and survives restarts. Multi-host deployments need a shared external store instead of instance-local files. Replayed request ids share an in-memory result/in-flight call, and the SDK is explicitly limited to one attempt.
+
+A provider 429 is classified as either a minute-level cooldown or a daily exhaustion. The server remembers the cooldown and blocks further calls before they reach Google. Daily limits remain blocked until the provider's reset time (at least midnight Pacific). A new API key in the same Google project does not create fresh project quota. No automatic key/model rotation or billing changes are performed.
+
 ## Project layout
 
 - `app/`: Next.js entry page, layout, API routes, and backend debug screen at `/debug`.

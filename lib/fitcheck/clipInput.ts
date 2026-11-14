@@ -23,7 +23,7 @@ export function clipParts(body: Record<string, unknown> | null): Part[] {
       const webm = video.mimeType === 'video/webm' && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
       const mp4 = video.mimeType === 'video/mp4' && bytes.subarray(4, 8).toString() === 'ftyp';
       if (bytes.length > 4_000_000 || (!webm && !mp4)) throw new ApiError('The clip must be a valid WebM or MP4 video.');
-      return [{ inlineData: { mimeType: video.mimeType as string, data: video.data }, videoMetadata: { fps: 2 } }];
+      return [{ inlineData: { mimeType: video.mimeType as string, data: video.data }, videoMetadata: { fps: 1 } }];
     }
     if (!Array.isArray(clip.frames) || clip.frames.length < 2 || clip.frames.length > 6) throw new ApiError('Send 2–6 ordered frames from your outfit clip.');
     let previous = -1;

@@ -1,5 +1,5 @@
 import { Type } from "@google/genai";
-import { gemini, model, thinkingConfig } from "@/lib/fitcheck/gemini";
+import { generateFitContent, model, thinkingConfig } from "@/lib/fitcheck/gemini";
 import { sanitizeAnalysis } from "@/lib/fitcheck/analysis";
 import { ApiError, apiFailure, jpegFrame, readJson } from "@/lib/fitcheck/validation";
 
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   try {
     const body = await readJson(req) as Record<string, unknown> | null;
     const frame = jpegFrame(body?.snapshotBase64);
-    const response = await gemini().models.generateContent({
+    const response = await generateFitContent('report', body, {
       model: model(), contents: [{ role: "user", parts: [
         { inlineData: { mimeType: "image/jpeg", data: frame } },
         { text: "Review the visible outfit in this photo. Return a personal style breakdown and three short simulated audience reactions." },

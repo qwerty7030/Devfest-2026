@@ -1,7 +1,9 @@
+import { quotaFailure } from './quota';
+
 export const MAX_BODY_BYTES = 3_000_000;
 
 export class ApiError extends Error {
-  constructor(message: string, public status = 400) { super(message); }
+  constructor(message: string, public status = 400, public code?: string, public retryAfterSeconds?: number) { super(message); }
 }
 
 /** Bound the stream itself; Content-Length is optional and untrusted. */
@@ -40,9 +42,11 @@ export function jpegFrame(value: unknown): string {
 }
 
 export function apiFailure(e: unknown) {
-  if (e instanceof ApiError) return Response.json({ error: e.message }, { status: e.status });
-  if (e && typeof e === 'object' && 'status' in e && e.status === 429) {
-    return Response.json({ error: "Gemini's request quota is exhausted. Live analysis is paused; use a key/model with available quota or wait for it to reset.", code: 'AI_QUOTA_EXHAUSTED' }, { status: 429, headers: { 'Retry-After': '60' } });
+  if (e instanceof ApiError) return Response.json({ error: e.message, code: e.code, retryAfterSeconds: e.retryAfterSeconds }, { status: e.status,
+    headers: e.retryAfterSeconds ? { 'Retry-After': String(e.retryAfterSeconds) } : undefined });
+  const quota = quotaFailure(e);
+  if (quota) {
+    return Response.json({ error: quota.message, code: quota.code, retryAfterSeconds: quota.retryAfterSeconds }, { status: 429, headers: { 'Retry-After': String(quota.retryAfterSeconds) } });
   }
   console.warn("[fitcheck] AI request failed:", e instanceof Error ? e.name : "Unknown error");
   return Response.json({ error: "The stylist is unavailable right now. Please try again." }, { status: 503 });

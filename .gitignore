@@ -5,6 +5,7 @@
 **/node_modules/
 /frontend/dist/
 /artifacts/
+/data/.runtime/
 /.pnp
 .pnp.*
 .yarn/*

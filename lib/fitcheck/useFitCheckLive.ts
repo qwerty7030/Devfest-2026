@@ -9,7 +9,7 @@ import { usePersonDetector } from "./usePersonDetector";
 
 const MAX_COMMENTS = 30;
 const REFETCH_WHEN_QUEUE_BELOW = 5;
-const MIN_FETCH_GAP_MS = 3000;
+const MIN_FETCH_GAP_MS = 10_000;
 const LEFT_HOLD_MS = 5000;
 const RECENT_FOR_PROMPT = 15;
 
@@ -36,6 +36,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   const inFlightRef = useRef<AbortController | null>(null);
   const lastFetchRef = useRef(0);
   const recentAiRef = useRef<string[]>([]);
+  const budgetRef = useRef({ sessionId: '', requests: 0 });
   const leftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const goTo = useCallback((next: LiveState) => {
@@ -61,21 +62,24 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   // ---- one Gemini round trip ----
   const fetchBatch = useCallback(async () => {
     const video = videoRef.current;
-    if (!video || inFlightRef.current) return;
+    if (!video || inFlightRef.current || budgetRef.current.requests >= 2) return;
     const frame = captureFrame(video);
     if (!frame) return;
 
     const controller = new AbortController();
     inFlightRef.current = controller;
     lastFetchRef.current = Date.now();
+    if (!budgetRef.current.sessionId) budgetRef.current.sessionId = crypto.randomUUID();
+    budgetRef.current.requests++;
     try {
       const res = await fetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ frame, recent: recentAiRef.current }),
+        body: JSON.stringify({ frame, recent: recentAiRef.current, sessionId: budgetRef.current.sessionId, requestId: crypto.randomUUID() }),
         signal: controller.signal,
       });
       const data: CommentsResponse = await res.json();
+      if (!res.ok) return;
       const s = stateRef.current;
       if (s !== "ENTERED" && s !== "LIVE") return; // person left while we waited
       if (!data.person_visible || data.comments.length === 0) return;
@@ -150,6 +154,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     if (leftTimerRef.current) clearTimeout(leftTimerRef.current);
     queueRef.current?.clear();
     recentAiRef.current = [];
+    budgetRef.current = { sessionId: '', requests: 0 };
     setComments([]);
     setLastResult(null);
     goTo("EMPTY");
