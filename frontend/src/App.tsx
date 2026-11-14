@@ -22,17 +22,18 @@ import { Camera, FlipHorizontal, Volume2, VolumeX, Sparkles, RefreshCw, Sliders 
 
 /** Sessions shorter than this (someone just walking past) end without a results card. */
 const MIN_SESSION_MS = 5000;
-/** Results card stays at least this long before a new walk-in can replace it. */
-const RESULTS_MIN_MS = 4000;
-/** Results card returns to WAITING on its own after this long. */
-const RESULTS_HOLD_MS = 12000;
+/**
+ * Results card returns to WAITING on its own after this long. Being in frame
+ * doesn't dismiss it (people walk up to read it); use Quick Retake / Reset.
+ */
+const RESULTS_HOLD_MS = 30000;
 /** CoachingCue's tips span 16s; while live we cycle through them. */
 const COACHING_CYCLE_SEC = 16;
 
 /**
  * Continuous live flow, no recording step:
  *   WAITING → (person walks in) → LIVE → (person leaves) → ANALYZING → RESULTS → WAITING
- * Someone walking in during RESULTS (after RESULTS_MIN_MS) goes straight to LIVE.
+ * RESULTS stays up until Quick Retake / Reset, or RESULTS_HOLD_MS (30s).
  * Space = go live manually, Esc = back to WAITING.
  */
 export function App() {
@@ -44,7 +45,6 @@ export function App() {
   const [showGuide, setShowGuide] = useState<boolean>(true);
   /** Manual "Go Live" (button / space): counts as a person in frame until the session ends. */
   const [forcedLive, setForcedLive] = useState<boolean>(false);
-  const [resultsDismissable, setResultsDismissable] = useState<boolean>(false);
 
   const sessionRef = useRef(0);
   const liveStartRef = useRef(0);
@@ -172,27 +172,16 @@ export function App() {
       return;
     }
     if (needsReentryRef.current) return;
-    if (appState === 'WAITING' || (appState === 'RESULTS' && resultsDismissable)) goLive();
-  }, [personInFrame, appState, resultsDismissable, goLive, endLive]);
+    if (appState === 'WAITING') goLive();
+  }, [personInFrame, appState, goLive, endLive]);
 
-  // RESULTS: hold briefly before a walk-in can replace it, auto-return after a while.
+  // RESULTS: stays readable; auto-return to WAITING after RESULTS_HOLD_MS. Whoever
+  // is standing there reading it must step out before a new session starts.
   useEffect(() => {
-    if (appState !== 'RESULTS') {
-      setResultsDismissable(false);
-      return;
-    }
-    const minTimer = window.setTimeout(() => setResultsDismissable(true), RESULTS_MIN_MS);
-    const holdTimer = window.setTimeout(() => {
-      clearLiveState();
-      setFitResult(null);
-      setCapturedSnapshot(undefined);
-      setAppState('WAITING');
-    }, RESULTS_HOLD_MS);
-    return () => {
-      window.clearTimeout(minTimer);
-      window.clearTimeout(holdTimer);
-    };
-  }, [appState, clearLiveState]);
+    if (appState !== 'RESULTS') return;
+    const holdTimer = window.setTimeout(backToWaiting, RESULTS_HOLD_MS);
+    return () => window.clearTimeout(holdTimer);
+  }, [appState, backToWaiting]);
 
   // LIVE: time-on-stream clock for the header and coaching cues.
   useEffect(() => {
