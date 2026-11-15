@@ -1,5 +1,9 @@
 # Deploy Drip Score to Firebase App Hosting
 
+Live URL: https://drip-score--devfest2026-41803.us-central1.hosted.app
+
+Verified on November 15, 2026: successful App Hosting rollout, home/feed pages, client scripts, configured health endpoint, native-video comments, and multi-photo blended scoring. Future source changes need the deploy command below; a Git push alone does not deploy this CLI-connected backend.
+
 Project: `devfest2026-41803`. Intended backend: `drip-score` in `us-central1`.
 Uses Firebase App Hosting's Next.js adapter for the UI and same-origin server API routes.
 The Firebase browser SDK configuration does not authenticate deployments and is not the Gemini server key.
