@@ -2,6 +2,8 @@
 
 All routes are same-origin REST endpoints. There is no WebSocket requirement or separate port 8000 service. API keys stay on the server. Responses use JSON; successful AI responses have `Cache-Control: no-store`.
 
+Both AI endpoints use the server's `GEMINI_MODEL`, defaulting to `gemini-3.1-flash-lite`. An explicit model change preserves the app-wide usage counters; provider cooldowns and cached responses are scoped to the selected model. The same project key can be used when it has access to the model. Quota availability must be checked in AI Studio.
+
 App clients include `sessionId` (one UUID per fit check) and `requestId` (one UUID per distinct analysis). Preserve a request id when replaying the same report. Concurrent/replayed ids share an in-memory response/in-flight call without another provider attempt. Legacy diagnostics without ids share a capped diagnostic session.
 
 The server permits at most two live attempts and one report attempt per session, one in-flight provider request, a ten-second minimum gap, and defaults of four calls per rolling minute / 100 per Pacific day across both endpoints. A locked, ignored `data/.runtime/budget.json` coordinates local processes and survives restarts. Only counters and opaque ids are stored, not keys or camera data. For multiple hosts, replace the local ledger with a shared store.

@@ -17,7 +17,7 @@ export async function generateFitContent(kind: 'live' | 'report', body: Record<s
   };
   const sessionId = id(body?.sessionId, 'legacy-diagnostic-session');
   const requestId = id(body?.requestId, crypto.randomUUID());
-  const key = `${sessionId}:${kind}:${requestId}`;
+  const key = `${parameters.model}:${sessionId}:${kind}:${requestId}`;
   const now = Date.now();
   for (const [k, entry] of cache) if (entry.expires <= now) cache.delete(k);
   const existing = cache.get(key);
@@ -34,7 +34,7 @@ export async function generateFitContent(kind: 'live' | 'report', body: Record<s
   while (cache.size > 64) cache.delete(cache.keys().next().value!);
   return promise;
 }
-export const model = () => process.env.GEMINI_MODEL || "gemini-3.5-flash";
+export const model = () => process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
 export function thinkingConfig() {
   const levels: Record<string, ThinkingLevel> = { minimal: ThinkingLevel.MINIMAL, low: ThinkingLevel.LOW, medium: ThinkingLevel.MEDIUM, high: ThinkingLevel.HIGH };
   const level = levels[(process.env.GEMINI_THINKING ?? "low").toLowerCase()];

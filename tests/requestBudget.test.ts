@@ -60,6 +60,15 @@ test('the locked ledger shares usage across server instances and restarts', () =
   } finally { unlinkSync(join(directory, 'budget.json')); rmdirSync(directory); }
 });
 
+test('an explicit model change leaves shared usage intact without inheriting another model cooldown', () => {
+  const budget = new RequestBudget(new MemoryBudgetStore(), { ...relaxed, perDay: 2 });
+  budget.acquire('first', 'live', 'old-call', 'old-model', start); budget.release('old-call');
+  budget.providerFailed('old-model', Object.assign(new Error('{"quotaId":"GenerateRequestsPerDayPerProject"}'), { status: 429 }), start);
+  assert.throws(() => budget.acquire('blocked', 'live', 'blocked', 'old-model', start + 1), (e: unknown) => e instanceof ApiError && e.code === 'AI_DAILY_QUOTA_EXHAUSTED');
+  budget.acquire('second', 'live', 'new-call', 'gemini-3.1-flash-lite', start + 2); budget.release('new-call');
+  assert.throws(() => budget.acquire('third', 'live', 'extra', 'gemini-3.1-flash-lite', start + 3), (e: unknown) => e instanceof ApiError && e.code === 'APP_DAILY_BUDGET');
+});
+
 test('daily and minute quota errors have different recovery times, including daylight saving time', () => {
   const minute = quotaFailure(Object.assign(new Error('{"quotaId":"RequestsPerMinute","retryDelay":"12s"}'), { status: 429 }), start)!;
   const daily = quotaFailure(Object.assign(new Error('{"quotaId":"GenerateRequestsPerDayPerProject","retryDelay":"12s"}'), { status: 429 }), start)!;

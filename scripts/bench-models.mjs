@@ -10,10 +10,11 @@ if (!img) {
   console.error("usage: node scripts/bench-models.mjs frame.jpg [model ...]");
   process.exit(1);
 }
-const list = models.length ? models : ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+// Only probe the selected model unless comparison models were explicitly supplied.
+const list = models.length ? models : [process.env.GEMINI_MODEL || "gemini-3.1-flash-lite"];
 const data = readFileSync(img).toString("base64");
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const RUNS = 3;
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY, httpOptions: { retryOptions: { attempts: 1 } } });
+const RUNS = 1;
 
 for (const model of list) {
   const times = [];

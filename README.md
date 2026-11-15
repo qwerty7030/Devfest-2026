@@ -30,7 +30,7 @@ Camera failures, missing configuration, provider errors, unclear photos, and can
 ## Configuration
 
 - `GEMINI_API_KEY`: server-only key from Google AI Studio. Never use a `NEXT_PUBLIC_` prefix.
-- `GEMINI_MODEL`: defaults to `gemini-3.5-flash`, verified with native short video input; availability and quota depend on your key. `node scripts/list-models.mjs` lists accessible models. Quota exhaustion pauses live capture/analysis and shows the actual issue; it is never presented as an inability to see clothing.
+- `GEMINI_MODEL`: defaults to `gemini-3.1-flash-lite` for both live video feedback and the final photo report. It supports video, images, and structured output; availability and quota depend on your key. `node scripts/list-models.mjs` lists accessible models. Quota exhaustion pauses live capture/analysis and shows the actual issue; it is never presented as an inability to see clothing.
 - `GEMINI_THINKING`: `minimal`, `low`, `medium`, `high`, or `off`. Defaults to `low`; use `off` if your chosen model rejects thinking configuration.
 
 Only outfit styling is rated. Short silent clips and the selected results photo are sent to Google Gemini during an explicitly started real session. Clips stay in a bounded in-memory buffer and are discarded as newer clips arrive; no audio is captured. Browsers without supported video recording send a short timestamped sequence of camera frames instead. This app does not persist clips, photos, comments, or reports to a database. Session data stays in browser memory until reset or reload; saved downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
@@ -46,6 +46,8 @@ Both endpoints enforce a shared ceiling of **four provider calls per rolling min
 Only session/request identifiers and counters are persisted in ignored `data/.runtime/`; API keys, images, videos, and model responses are not written there. The file lock coordinates local server processes and survives restarts. Multi-host deployments need a shared external store instead of instance-local files. Replayed request ids share an in-memory result/in-flight call, and the SDK is explicitly limited to one attempt.
 
 A provider 429 is classified as either a minute-level cooldown or a daily exhaustion. The server remembers the cooldown and blocks further calls before they reach Google. Daily limits remain blocked until the provider's reset time (at least midnight Pacific). A new API key in the same Google project does not create fresh project quota. No automatic key/model rotation or billing changes are performed.
+
+An explicit `GEMINI_MODEL` change uses the selected model's available project quota. It does not reset Google's usage or the app's shared counters. Provider cooldowns are scoped to the model that failed, so an exhausted previous model does not block the new selection. The app cannot see calls made by other apps or keys in the project: check AI Studio's active limits before testing. The optional benchmark script makes one call per explicitly selected model and defaults to the configured model alone; these manual probes are separate from the app ledger and consume Google quota.
 
 ## Project layout
 
