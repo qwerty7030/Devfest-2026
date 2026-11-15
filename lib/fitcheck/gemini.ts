@@ -61,6 +61,28 @@ function retryDelayMs(err: ApiError): number | null {
   return match ? Math.ceil(Number(match[1]) * 1000) : null;
 }
 
+// ---- call-rate tracking (for logs) ----
+
+/**
+ * Timestamps of real Gemini requests in the last minute. Kept on globalThis
+ * because Next loads each route as its own module in dev, and we want one
+ * count across /api/comments and /api/analyze.
+ */
+const rate = globalThis as unknown as { __fitcheckCalls?: number[] };
+
+function recordCall() {
+  const now = Date.now();
+  rate.__fitcheckCalls = (rate.__fitcheckCalls ?? []).filter((t) => now - t < 60_000);
+  rate.__fitcheckCalls.push(now);
+}
+
+/** "14:03:22 calls/min=4" for log lines: makes runaway polling easy to spot. */
+export function rateTag() {
+  const now = Date.now();
+  rate.__fitcheckCalls = (rate.__fitcheckCalls ?? []).filter((t) => now - t < 60_000);
+  return `${new Date(now).toTimeString().slice(0, 8)} calls/min=${rate.__fitcheckCalls.length}`;
+}
+
 /**
  * generateContent across the MODELS chain. Skips models that are currently
  * blocked, blocks a model on 429 (for Google's retryDelay) or 503 (briefly),
@@ -76,6 +98,7 @@ export async function generateWithFallback(
     const until = blockedUntil.get(model) ?? 0;
     if (until > now) continue;
     try {
+      recordCall();
       const res = await gemini().models.generateContent({ ...params, model });
       return { res, model };
     } catch (e) {

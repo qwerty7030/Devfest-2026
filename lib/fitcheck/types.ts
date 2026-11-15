@@ -1,3 +1,4 @@
+import type { Fit } from "./fitSchema";
 import type { RefObject } from "react";
 
 /**
@@ -63,6 +64,8 @@ export interface CommentsResponse {
   vibe?: string;
   rating?: number;
   comments: { text: string; tone: Tone; tag?: CommentTag }[];
+  /** Results-card data for this frame (only when person_visible). */
+  fit?: Fit;
   /** Set when every model is rate-limited: don't call again for this long. */
   retryAfterMs?: number;
 }

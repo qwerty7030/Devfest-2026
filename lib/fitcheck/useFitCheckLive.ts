@@ -9,8 +9,9 @@ import { useCamera } from "./useCamera";
 import { usePersonDetector } from "./usePersonDetector";
 
 const MAX_COMMENTS = 30;
-const REFETCH_WHEN_QUEUE_BELOW = 5;
-const MIN_FETCH_GAP_MS = 3000;
+const REFETCH_WHEN_QUEUE_BELOW = 3;
+/** Minimum gap before the Nth comments call of a session (last value repeats). Matches the frontend. */
+const FETCH_GAPS_MS = [0, 10_000, 15_000, 20_000, 30_000];
 const LEFT_HOLD_MS = 5000;
 const FILLER_GAP_MS = 1500;
 const RECENT_FOR_PROMPT = 15;
@@ -41,6 +42,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
   const queueRef = useRef<CommentQueue | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   const lastFetchRef = useRef(0);
+  const callsThisSessionRef = useRef(0);
   const lastFillerRef = useRef(0);
   const recentAiRef = useRef<string[]>([]);
   const leftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,7 +59,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     const q = new CommentQueue((c) => {
       setComments((prev) => [...prev, c].slice(-MAX_COMMENTS));
       if (c.source === "ai") recentAiRef.current = [...recentAiRef.current, c.text].slice(-RECENT_FOR_PROMPT);
-    });
+    }, { minDelayMs: 900, maxDelayMs: 1900 });
     queueRef.current = q;
     q.start();
     return () => q.stop();
@@ -73,6 +75,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
     const controller = new AbortController();
     inFlightRef.current = controller;
     lastFetchRef.current = Date.now();
+    callsThisSessionRef.current += 1;
     try {
       const res = await fetch("/api/comments", {
         method: "POST",
@@ -111,6 +114,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
         { front: true },
       );
       recentAiRef.current = [];
+      callsThisSessionRef.current = 0;
       goTo("ENTERED");
       void fetchBatch();
     } else if (!present && (s === "ENTERED" || s === "LIVE")) {
@@ -133,7 +137,7 @@ export function useFitCheckLive({ keyboardShortcuts = true, useDetector = true }
       const now = Date.now();
 
       if ((s === "ENTERED" || s === "LIVE") && q) {
-        if (q.size < REFETCH_WHEN_QUEUE_BELOW && now - lastFetchRef.current > MIN_FETCH_GAP_MS && tabVisible()) {
+        if (q.size < REFETCH_WHEN_QUEUE_BELOW && now - lastFetchRef.current > FETCH_GAPS_MS[Math.min(callsThisSessionRef.current, FETCH_GAPS_MS.length - 1)] && tabVisible()) {
           void fetchBatch();
         }
         // Never let the chat go silent while waiting on (or failing to reach) Gemini.

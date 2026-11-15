@@ -27,8 +27,8 @@ export function usePersonDetector(
   enabled: boolean,
   {
     intervalMs = 200,
-    enterHits = 3,
-    exitAfterMs = 2500, // long enough that a 360° turn doesn't end the session
+    enterHits = 5, // ~1s of steady detection before going live
+    exitAfterMs = 4000, // leaning out or a 360° turn doesn't end the session
     minHeightFraction = 0.25,
     scoreThreshold = 0.5,
   }: DetectorOptions = {},

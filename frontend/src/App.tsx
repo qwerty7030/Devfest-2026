@@ -21,18 +21,18 @@ import { ResultsCard } from './components/Results/ResultsCard';
 import { Camera, FlipHorizontal, Volume2, VolumeX, Sparkles, RefreshCw, Sliders } from 'lucide-react';
 
 /** Sessions shorter than this (someone just walking past) end without a results card. */
-const MIN_SESSION_MS = 5000;
+const MIN_SESSION_MS = 10000;
 /**
  * Results card returns to WAITING on its own after this long. Being in frame
  * doesn't dismiss it (people walk up to read it); use Quick Retake / Reset.
  */
 const RESULTS_HOLD_MS = 30000;
-/** CoachingCue's tips span 16s; while live we cycle through them. */
-const COACHING_CYCLE_SEC = 16;
+/** A fit check ends on its own after this long (results card), even if they stay in frame. */
+const LIVE_DURATION_SEC = 15;
 
 /**
  * Continuous live flow, no recording step:
- *   WAITING → (person walks in) → LIVE → (person leaves) → ANALYZING → RESULTS → WAITING
+ *   WAITING → (person walks in) → LIVE (15s, or until they leave) → ANALYZING → RESULTS → WAITING
  * RESULTS stays up until Quick Retake / Reset, or RESULTS_HOLD_MS (30s).
  * Space = go live manually, Esc = back to WAITING.
  */
@@ -183,14 +183,18 @@ export function App() {
     return () => window.clearTimeout(holdTimer);
   }, [appState, backToWaiting]);
 
-  // LIVE: time-on-stream clock for the header and coaching cues.
+  // LIVE: clock for the header countdown and coaching cues; ends the session at LIVE_DURATION_SEC.
+  // Ending counts as "manual", so whoever is still standing there can read the card
+  // without a new session starting until they step out and back in.
   useEffect(() => {
     if (appState !== 'LIVE') return;
     const id = window.setInterval(() => {
-      setLiveElapsedSec(Math.floor((Date.now() - liveStartRef.current) / 1000));
-    }, 500);
+      const elapsed = Math.floor((Date.now() - liveStartRef.current) / 1000);
+      setLiveElapsedSec(elapsed);
+      if (elapsed >= LIVE_DURATION_SEC) endLive(true);
+    }, 250);
     return () => window.clearInterval(id);
-  }, [appState]);
+  }, [appState, endLive]);
 
   // WAITING: occasional "anyone there?" chatter so the stream feels alive.
   useEffect(() => {
@@ -336,17 +340,15 @@ export function App() {
           <>
             <LiveHeader
               viewerCount={viewerCount}
-              elapsedSeconds={liveElapsedSec}
+              remainingSeconds={Math.max(0, LIVE_DURATION_SEC - liveElapsedSec)}
+              totalDurationSeconds={LIVE_DURATION_SEC}
               isMuted={isMuted}
               onToggleMute={handleToggleMute}
               onStop={() => endLive(true)}
             />
 
-            {/* Coaching tips cycle while live */}
-            <CoachingCue
-              elapsedSeconds={liveElapsedSec % COACHING_CYCLE_SEC}
-              totalDurationSeconds={COACHING_CYCLE_SEC}
-            />
+            {/* Coaching tips: step back → turn → details → final pose */}
+            <CoachingCue elapsedSeconds={liveElapsedSec} totalDurationSeconds={LIVE_DURATION_SEC} />
 
             <LiveChat comments={comments} />
             <FloatingReactions reactions={reactions} />

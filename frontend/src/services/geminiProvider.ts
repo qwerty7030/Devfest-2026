@@ -12,20 +12,29 @@ import { randomUsername } from './live/fakeUsers';
  *
  * Never lets the stream die: canned lines cover the first Gemini round trip,
  * filler covers slow or failed calls, and analyzeFit falls back to the mock.
- * Quota-friendly: ~1 call per 6s while someone is live, none while the tab is
- * hidden, and none at all while the backend says every model is rate-limited.
+ * Quota-friendly:
+ *  - comment calls slow down over a session (immediate, then 10s, 15s, 20s, 30s gaps)
+ *  - the results card is built from the `fit` returned with each comments batch,
+ *    so ending a session costs no extra API call
+ *  - no calls while the tab is hidden, or while the backend says every model is rate-limited
  */
 
-const REFETCH_WHEN_QUEUE_BELOW = 4;
-const MIN_FETCH_GAP_MS = 6000;
+const REFETCH_WHEN_QUEUE_BELOW = 3;
+/** Minimum gap before the Nth comments call of a session (last value repeats). */
+const FETCH_GAPS_MS = [0, 10_000, 15_000, 20_000, 30_000];
+/** Let the scanner animation play even though the result is already in hand. */
+const SCANNER_MIN_MS = 1500;
 const FILLER_GAP_MS = 1800;
 const RECENT_FOR_PROMPT = 15;
 const ANALYZE_TIMEOUT_MS = 12000;
 const REACTION_EMOJIS = ['❤️', '🔥', '👏', '✨', '💯', '😍', '👀'];
 
+type FitData = Pick<FitResult, 'overallScore' | 'archetype' | 'summary' | 'garments'>;
+
 interface CommentsApiResponse {
   person_visible: boolean;
   comments: { text: string; tone: Tone; tag?: string }[];
+  fit?: FitData;
   retryAfterMs?: number;
 }
 
@@ -51,6 +60,11 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
   private recentAi: string[] = [];
   /** 768px JPEG (base64) of the latest frame where Gemini confirmed a person. */
   private lastGoodFrame: string | null = null;
+  /** Results-card data from the latest comments batch where a person was visible. */
+  private lastFit: FitData | null = null;
+  /** AI hype comments shown this session, for the results card's "top comments". */
+  private shownHype: { username: string; comment: string; avatarUrl?: string }[] = [];
+  private callsThisSession = 0;
   private onComment: ((c: LiveComment) => void) | null = null;
   private onReaction: ((emoji: string) => void) | null = null;
 
@@ -76,8 +90,12 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
     this.recentAi = [];
     this.lastFetch = 0;
     this.lastGoodFrame = null;
+    this.lastFit = null;
+    this.shownHype = [];
+    this.callsThisSession = 0;
 
-    this.queue = new CommentQueue((c) => this.emit(c), { minDelayMs: 600, maxDelayMs: 1400 });
+    // ~1.4s per comment on average: a 13-comment batch lasts ~18s.
+    this.queue = new CommentQueue((c) => this.emit(c), { minDelayMs: 900, maxDelayMs: 1900 });
     this.queue.push(sample(ENTERED_LINES, 3).map((l) => ({ ...l, source: 'local' as const })));
     this.queue.start();
 
@@ -103,8 +121,23 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
     return mockFitCheckProvider.sendUserComment(commentText);
   }
 
-  /** Scores the outfit. Prefers the last frame where a person was confirmed, since they may have left by now. */
+  /**
+   * The results card. Normally built from the `fit` that came back with the
+   * session's comments (no API call). Falls back to /api/analyze only if the
+   * session never got one, then to the mock.
+   */
   async analyzeFit(snapshotBase64?: string): Promise<FitResult> {
+    if (this.lastFit) {
+      const fit = this.lastFit;
+      await new Promise((r) => setTimeout(r, SCANNER_MIN_MS));
+      return {
+        ...fit,
+        topComments: this.pickTopComments(),
+        capturedSnapshotUrl: this.getLastGoodFrameUrl() ?? snapshotBase64,
+        timestamp: Date.now(),
+      };
+    }
+
     const video = this.getVideo();
     const frame =
       this.lastGoodFrame ??
@@ -157,10 +190,23 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
     };
   }
 
+  private pickTopComments() {
+    const picked = sample(this.shownHype, 3);
+    while (picked.length < 3) {
+      const u = pick(MOCK_USERS);
+      picked.push({ username: u.username, comment: pick(FILLER_LINES).text, avatarUrl: u.avatar });
+    }
+    return picked;
+  }
+
   private emit(c: QueuedComment) {
     if (!this.onComment) return;
-    this.onComment(this.toLiveComment(c));
+    const live = this.toLiveComment(c);
+    this.onComment(live);
     if (c.source === 'ai') this.recentAi = [...this.recentAi, c.text].slice(-RECENT_FOR_PROMPT);
+    if (c.source === 'ai' && c.tone === 'hype') {
+      this.shownHype = [...this.shownHype, { username: live.username, comment: live.comment, avatarUrl: live.avatarUrl }].slice(-20);
+    }
     if (c.tone === 'hype' && this.onReaction) this.onReaction(Math.random() < 0.5 ? '🔥' : '❤️');
   }
 
@@ -171,7 +217,7 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
     if (
       q.size < REFETCH_WHEN_QUEUE_BELOW &&
       !this.inFlight &&
-      now - this.lastFetch > MIN_FETCH_GAP_MS &&
+      now - this.lastFetch > FETCH_GAPS_MS[Math.min(this.callsThisSession, FETCH_GAPS_MS.length - 1)] &&
       now >= this.pausedUntil &&
       tabVisible()
     ) {
@@ -193,6 +239,7 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
     const controller = new AbortController();
     this.inFlight = controller;
     this.lastFetch = Date.now();
+    this.callsThisSession += 1;
     try {
       const res = await fetch('/api/comments', {
         method: 'POST',
@@ -207,6 +254,7 @@ export class GeminiFitCheckProvider implements FitCheckProvider {
       }
       if (!this.queue || !data.person_visible || !data.comments?.length) return;
       if (candidate) this.lastGoodFrame = candidate;
+      if (data.fit) this.lastFit = data.fit;
       this.queue.push(data.comments.map((c) => ({ ...c, source: 'ai' as const })));
     } catch (e) {
       if ((e as Error).name !== 'AbortError') console.warn('[geminiProvider] comments fetch failed', e);

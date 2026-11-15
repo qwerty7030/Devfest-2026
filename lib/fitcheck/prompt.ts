@@ -1,6 +1,7 @@
 import "server-only";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { FIT_INSTRUCTIONS } from "./fitSchema";
 
 const DATA_DIR = join(process.cwd(), "data");
 const PRIMARY = join(DATA_DIR, "fitcheck_comments.json");
@@ -62,7 +63,9 @@ Each time you get a webcam frame:
 - Comment ONLY on clothing, accessories, and styling. Never comment on the person's body, weight, face, skin, race, age, gender, or attractiveness.
 - Don't repeat or closely paraphrase any comment listed as already shown.
 - rating: an overall fit score from 0 to 10, one decimal place. Be generous but honest.
-- vibe: a 2 to 4 word style label, like "y2k streetwear" or "quiet luxury".${exampleBlock}`;
+- vibe: a 2 to 4 word style label, like "y2k streetwear" or "quiet luxury".
+- fit: when a person is visible, also score the outfit for the end-of-stream results card:
+${FIT_INSTRUCTIONS}${exampleBlock}`;
 }
 
 /** Built once per server start, so the prompt stays stable between requests. */

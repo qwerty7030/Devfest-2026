@@ -1,11 +1,12 @@
 import { Type } from "@google/genai";
-import { clampStr, generateWithFallback, normalizeFrame, QuotaExhausted, shortError, thinkingConfig } from "@/lib/fitcheck/gemini";
+import { clampStr, generateWithFallback, normalizeFrame, QuotaExhausted, rateTag, shortError, thinkingConfig } from "@/lib/fitcheck/gemini";
+import { fitSchemaProperties, sanitizeFit } from "@/lib/fitcheck/fitSchema";
 import { SYSTEM_PROMPT } from "@/lib/fitcheck/prompt";
 import type { CommentsRequest, CommentsResponse, CommentTag, Tone } from "@/lib/fitcheck/types";
 
 export const runtime = "nodejs";
 
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 10000; // a bit more output now that each batch also scores the fit
 const TONES: readonly Tone[] = ["hype", "roast", "question", "emoji"];
 const TAGS: readonly CommentTag[] = ["Outerwear", "Tops", "Bottoms", "Footwear", "Accessories", "Vibe"];
 
@@ -29,8 +30,15 @@ const responseSchema = {
         required: ["text", "tone"],
       },
     },
+    // Results-card data, so the end of a session needs no separate /api/analyze call.
+    fit: {
+      type: Type.OBJECT,
+      properties: fitSchemaProperties,
+      required: ["overallScore", "archetype", "summary", "garments"],
+    },
   },
-  required: ["person_visible", "comments"],
+  // fit is required so every model returns it; it is dropped when no person is visible.
+  required: ["person_visible", "comments", "fit"],
 };
 
 function parseBody(body: unknown): CommentsRequest | null {
@@ -62,11 +70,14 @@ function sanitize(raw: unknown): CommentsResponse {
   const rating = typeof o.rating === "number" && Number.isFinite(o.rating)
     ? Math.round(Math.min(10, Math.max(0, o.rating)) * 10) / 10
     : undefined;
+  const personVisible = o.person_visible === true;
+  const fit = personVisible ? sanitizeFit(o.fit) : null;
   return {
-    person_visible: o.person_visible === true,
+    person_visible: personVisible,
     vibe: typeof o.vibe === "string" ? o.vibe.slice(0, 40) : undefined,
     rating,
     comments,
+    ...(fit ? { fit } : {}),
   };
 }
 
@@ -101,11 +112,11 @@ export async function POST(req: Request) {
     });
 
     const out = sanitize(JSON.parse(res.text ?? "{}"));
-    console.log(`[api/comments] ${model} ${Date.now() - started}ms visible=${out.person_visible} n=${out.comments.length} rating=${out.rating ?? "-"}`);
+    console.log(`[api/comments] ${rateTag()} ${model} ${Date.now() - started}ms visible=${out.person_visible} n=${out.comments.length} fit=${out.fit ? `${out.fit.overallScore} "${out.fit.archetype}"` : "-"}`);
     return Response.json(out);
   } catch (e) {
     // Rate limits, safety blocks, timeouts, bad JSON: the client falls back to local filler.
-    console.warn(`[api/comments] failed after ${Date.now() - started}ms: ${shortError(e)}`);
+    console.warn(`[api/comments] ${rateTag()} failed after ${Date.now() - started}ms: ${shortError(e)}`);
     if (e instanceof QuotaExhausted) return Response.json({ ...EMPTY, retryAfterMs: e.retryAfterMs });
     return Response.json(EMPTY);
   }
