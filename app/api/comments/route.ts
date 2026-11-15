@@ -6,7 +6,7 @@ import { apiFailure, readJson, ApiError } from '@/lib/fitcheck/validation';
 import { clipParts, knownOutfit, MAX_CLIP_BODY_BYTES } from '@/lib/fitcheck/clipInput';
 
 export const runtime = 'nodejs';
-export const maxDuration = 20;
+export const maxDuration = 35;
 const string = { type: Type.STRING };
 const responseSchema = {
   type: Type.OBJECT,
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     ] }], config: {
       systemInstruction: SYSTEM_PROMPT, responseMimeType: 'application/json', responseSchema,
       temperature: .7, maxOutputTokens: 2600, ...thinkingConfig(),
-      abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(12_000)]),
+      abortSignal: AbortSignal.any([req.signal, AbortSignal.timeout(25_000)]),
     } });
     const output = sanitizeComments(JSON.parse(response.text ?? '{}'));
     if (output.person_visible && output.comments.length === 0) throw new ApiError('The outfit feedback was incomplete. Hold your pose while we try again.', 502);

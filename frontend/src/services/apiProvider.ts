@@ -38,7 +38,7 @@ export function startLiveFeed(source: OutfitClipSource, onComment: (c: LiveComme
     try {
       const res = await fetch('/api/comments', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clips, sessionId, requestId: crypto.randomUUID(), ...session.context() }),
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]) });
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]) });
       if (!res.ok) {
         const failure = await res.json().catch(() => null);
         if (res.status === 429) {
