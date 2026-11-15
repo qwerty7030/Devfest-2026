@@ -40,7 +40,7 @@ function Harness({ live, label }: { live: FitCheckLive; label: string }) {
       </div>
 
       <section className="flex-1 flex flex-col gap-3 text-sm max-w-xl">
-        <h1 className="text-lg font-bold">Drip Score pipeline: {label}</h1>
+        <h1 className="text-lg font-bold">oko pipeline: {label}</h1>
         {error && <p className="text-red-400">{error}</p>}
         <div className="flex gap-2">
           <button onClick={forceEnter} className="px-3 py-1.5 rounded bg-red-600">Force enter (Space)</button>

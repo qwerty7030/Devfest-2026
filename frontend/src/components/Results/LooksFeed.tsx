@@ -7,7 +7,7 @@ import '../../studio.css';
 
 function LookCard({ post, onDelete }: { post: FitPost; onDelete: () => void }) {
   const [photo, setPhoto] = useState(0), [expanded, setExpanded] = useState(false);
-  const download = () => { const link = document.createElement('a'); link.href = post.capturedPhotos[photo]; link.download = `drip-score-${post.id}-${photo + 1}.jpg`; link.click(); };
+  const download = () => { const link = document.createElement('a'); link.href = post.capturedPhotos[photo]; link.download = `oko-${post.id}-${photo + 1}.jpg`; link.click(); };
   return <article className="look-card">
     <header><div><strong>{post.archetype}</strong><small>{post.source === 'demo' ? 'Demo · ' : ''}{new Date(post.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small></div><button className="icon-button" onClick={onDelete} aria-label="Delete this look"><Trash2 size={16}/></button></header>
     {post.capturedPhotos.length ? <><div className="look-photo"><img src={post.capturedPhotos[photo]} alt={`Outfit photo ${photo + 1} of ${post.capturedPhotos.length}`}/><span className="photo-counter">{photo + 1} / {post.capturedPhotos.length}</span>
@@ -41,5 +41,5 @@ export function LooksFeed({ latest, onCamera, saveNotice }: { latest?: FitPost; 
     return () => { active = false; };
   }, [latest]);
   const remove = async (id: string) => { try { await deleteLook(id); setPosts(p => p.filter(x => x.id !== id)); } catch { setNotice('Could not delete this look. Please try again.'); } };
-  return <div className="feed-shell"><header className="studio-nav"><Link className="wordmark" href="/">drip score<span>®</span></Link>{onCamera ? <button className="text-button" onClick={onCamera}>New look ↗</button> : <Link href="/">New look ↗</Link>}</header><main className="looks-feed"><div className="feed-heading"><h1>My looks</h1><p>Scores in Firestore · photos on this browser.</p></div>{notice && <p role="status">{notice}</p>}{loading && !posts.length ? <p>Loading looks…</p> : !posts.length ? <div className="empty-feed"><p>Your next look starts here.</p><Link className="primary-action" href="/">Open camera</Link></div> : posts.map(post => <LookCard key={post.id} post={post} onDelete={() => void remove(post.id)}/>)}</main></div>;
+  return <div className="feed-shell"><header className="studio-nav"><Link className="wordmark" href="/">oko</Link>{onCamera ? <button className="text-button" onClick={onCamera}>New look ↗</button> : <Link href="/">New look ↗</Link>}</header><main className="looks-feed"><div className="feed-heading"><h1>My looks</h1><p>Scores in Firestore · photos on this browser.</p></div>{notice && <p role="status">{notice}</p>}{loading && !posts.length ? <p>Loading looks…</p> : !posts.length ? <div className="empty-feed"><p>Your next look starts here.</p><Link className="primary-action" href="/">Open camera</Link></div> : posts.map(post => <LookCard key={post.id} post={post} onDelete={() => void remove(post.id)}/>)}</main></div>;
 }

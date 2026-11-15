@@ -9,7 +9,7 @@ function database(): Promise<IDBDatabase> {
     request.onupgradeneeded = () => request.result.createObjectStore('looks', { keyPath: 'id' });
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Close other Drip Score tabs to save your looks.'));
+    request.onblocked = () => reject(new Error('Close other oko tabs to save your looks.'));
   });
 }
 async function saveLocal(post: FitPost) {

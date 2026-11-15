@@ -45,7 +45,7 @@ export function startLiveFeed(source: OutfitClipSource, onComment: (c: LiveComme
           if (failure?.code === 'APP_COOLDOWN') {
             requests--; // The server rejected this before contacting Gemini.
             nextAllowed = Date.now() + Math.max(1, Number(failure.retryAfterSeconds) || Number(res.headers.get('Retry-After')) || 10) * 1000;
-            onStatus(typeof failure.error === 'string' ? failure.error : 'Cooling down before the next outdrip score…');
+            onStatus(typeof failure.error === 'string' ? failure.error : 'Cooling down before the next fit check…');
             return;
           }
           onStatus(typeof failure?.error === 'string' ? failure.error : 'Gemini quota reached. Live analysis is paused.');
@@ -62,7 +62,7 @@ export function startLiveFeed(source: OutfitClipSource, onComment: (c: LiveComme
       const present = session.accept(data);
       onObservations(session.inventory());
       onStatus(requests >= 2
-        ? session.inventory().length ? 'Outfit captured · playing your personalized feedback' : 'No outfit recognized after two checks. Start a new drip score in better light.'
+        ? session.inventory().length ? 'Outfit captured · playing your personalized feedback' : 'No outfit recognized after two checks. Start a new fit check in better light.'
         : present ? 'Following your outfit · fresh feedback as you show more' : 'Step into view and show off · your outfit is remembered');
     } catch (e) {
       if (!controller.signal.aborted) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { CameraOff, Sparkles, RefreshCw } from 'lucide-react';
+import { ArrowRight, CameraOff, RefreshCw } from 'lucide-react';
 
 interface CameraPreviewProps {
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -135,7 +135,7 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
   }, [isTestMode]);
 
   return (
-    <div className="relative w-full h-full bg-zinc-950 overflow-hidden select-none">
+    <div className="camera-preview">
       {/* Real Webcam Stream */}
       {!isTestMode && (
         <video
@@ -143,53 +143,39 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
           playsInline
           autoPlay
           muted
-          className={`w-full h-full object-cover transition-transform duration-300 ${
-            isMirrored ? 'scale-x-[-1]' : ''
-          }`}
+          className={`camera-video${isMirrored ? ' is-mirrored' : ''}`}
         />
       )}
 
       {/* Simulated Virtual Stream for Test Mode */}
       {isTestMode && (
-        <div className="relative w-full h-full">
+        <>
           <canvas
             data-demo-camera
             ref={canvasRef}
             width={480}
             height={854}
-            className="w-full h-full object-cover"
+            className="camera-video"
           />
-          <div className="absolute top-16 left-4 bg-purple-600/90 text-white text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full uppercase flex items-center gap-1 shadow-lg backdrop-blur-sm">
-            <Sparkles className="w-3 h-3" />
-            <span>Virtual Demo Feed</span>
-          </div>
-        </div>
+          {/* Vertical paper tag on the right edge keeps the centre and both bands clear */}
+          <span className="demo-feed-tag"><span className="dot" aria-hidden="true"/>Virtual Demo Feed</span>
+        </>
       )}
 
       {/* Permission Denied or Camera Error State */}
       {!isTestMode && hasPermission === false && (
-        <div className="camera-error absolute inset-0 bg-zinc-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
-          <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 mb-4">
-            <CameraOff className="w-8 h-8" />
-          </div>
-          <h3 className="text-white text-lg font-bold mb-2">Camera Access Needed</h3>
-          <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mb-6">
-            {errorMessage || 'Drip Score needs camera access to capture and rate your outfit.'}
+        <div className="camera-error" role="alert">
+          <p className="mono-label camera-error__eyebrow"><CameraOff size={14} strokeWidth={1.75} aria-hidden="true"/>Studio / Camera</p>
+          <h2 className="display camera-error__title">Camera Access Needed {'//'}</h2>
+          <p className="camera-error__body">
+            {errorMessage || 'oko needs camera access to capture and rate your outfit.'}
           </p>
-          <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button
-              onClick={onRetry}
-              className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Retry Camera Permission</span>
+          <div className="camera-error__actions">
+            <button className="btn-paper" onClick={onEnableTestMode}>
+              <span>Launch Virtual Demo Feed</span><ArrowRight size={20} strokeWidth={1.75} aria-hidden="true"/>
             </button>
-            <button
-              onClick={onEnableTestMode}
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-lg flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Launch Virtual Demo Feed</span>
+            <button className="btn-smoke" onClick={onRetry}>
+              <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true"/><span>Retry Camera Permission</span>
             </button>
           </div>
         </div>

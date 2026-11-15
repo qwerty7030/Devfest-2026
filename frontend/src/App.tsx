@@ -1,7 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Camera, FlipHorizontal, RefreshCw, Volume2, VolumeX, X } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, ArrowUpRight, ChevronDown, FlipHorizontal, SwitchCamera, Volume2, VolumeX, X } from 'lucide-react';
 import type { AppState } from './types/fitCheck';
 import type { OutfitObservation } from '../../lib/fitcheck/types';
 import { useCamera } from './hooks/useCamera';
@@ -30,6 +31,7 @@ export function App() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [activeModel, setActiveModel] = useState('Connecting…');
   const [observations, setObservations] = useState<OutfitObservation[]>([]);
+  const [showConnection, setShowConnection] = useState(false);
   const camera = useCamera(), live = useLiveReactions();
   const { stopCamera, videoRef } = camera;
   const capture = camera.captureSnapshot, demo = camera.isTestMode;
@@ -95,23 +97,40 @@ export function App() {
   return <PhoneFrame><div className="camera-content">
     <CameraPreview {...camera} onRetry={camera.startCamera} onEnableTestMode={camera.toggleTestMode}/>
     {stage === 'READY' && <>
-      <div className="camera-toolbar"><span>{demo ? 'Demo' : 'Camera'}</span><div>
-        <button className="icon-button" onClick={camera.toggleMirror} aria-label="Mirror camera" aria-pressed={camera.isMirrored}><FlipHorizontal size={18}/></button>
-        <button className="icon-button" onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera"><RefreshCw size={18}/></button>
-        <button className="icon-button" onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'}>{muted ? <VolumeX size={18}/> : <Volume2 size={18}/>}</button>
-      </div></div>
-      {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome"><Camera size={30} strokeWidth={1}/><h1>Show your fit.</h1></div>}
-      <div className="studio-controls">
-        {configured === false && !demo && <p className="service-note">AI is not configured.</p>}
-        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>{camera.isCameraActive ? 'Start drip score' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</button>
-        <button className="text-button demo-action" onClick={camera.toggleTestMode}>{demo ? 'Use my camera' : 'Try demo'}</button>
-        <p className="privacy-note">{demo ? 'Sample session · no AI calls' : 'Clips to Gemini. Scores to Firestore. Photos stay here.'}</p>
-        <details className="version-info"><summary>Connection</summary><p>{process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p></details>
+      <div className="scrim-top" aria-hidden="true"/>
+      <div className="ready-top">
+        <nav className="ready-nav" aria-label="oko">
+          <span className="wordmark-ds"><b>oko</b><i>{'//'}</i></span>
+          <Link className="nav-link" href="/feed">My looks<ArrowUpRight size={16} strokeWidth={1.75} aria-hidden="true"/></Link>
+        </nav>
+        <div className="ready-toolbar">
+          <span className="tag-label"><span className="dot" aria-hidden="true"/>{demo ? 'Demo' : 'Camera'}</span>
+          <span className="spacer"/>
+          <button className={`icon-btn ${camera.isMirrored ? 'icon-btn--paper' : 'icon-btn--smoke'}`} onClick={camera.toggleMirror} aria-label="Mirror camera" aria-pressed={camera.isMirrored}><FlipHorizontal size={20} strokeWidth={1.75} aria-hidden="true"/></button>
+          <button className="icon-btn icon-btn--smoke" onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera"><SwitchCamera size={20} strokeWidth={1.75} aria-hidden="true"/></button>
+          <button className={`icon-btn ${muted ? 'icon-btn--smoke' : 'icon-btn--paper'}`} onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'} aria-pressed={!muted}>{muted ? <VolumeX size={20} strokeWidth={1.75} aria-hidden="true"/> : <Volume2 size={20} strokeWidth={1.75} aria-hidden="true"/>}</button>
+        </div>
+        {!(camera.hasPermission === false && !demo) && <div className="ready-heading">
+          <p className="mono-label">Studio / Ready</p>
+          <h1 className="display">Show your fit {'//'}</h1>
+        </div>}
+      </div>
+      <div className="ready-panel">
+        {configured === false && !demo && <p className="ready-note ready-note--alert" role="status">AI is not configured.</p>}
+        <button className="btn-primary" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>
+          <span>{camera.isCameraActive ? 'Start fit check' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</span><ArrowRight size={20} strokeWidth={1.75} aria-hidden="true"/>
+        </button>
+        <div className="ready-links">
+          <button className="link-underline" onClick={camera.toggleTestMode}>{demo ? 'Use my camera' : 'Try demo'}</button>
+          <button className="link-connection" aria-expanded={showConnection} aria-controls="ready-connection" onClick={() => setShowConnection(v => !v)}>Connection<ChevronDown size={18} strokeWidth={1.75} aria-hidden="true"/></button>
+        </div>
+        {showConnection && <p className="ready-connection" id="ready-connection">{process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p>}
+        <p className="ready-note">{demo ? 'Sample session · no AI calls' : 'Clips to Gemini. Scores to Firestore. Photos stay here.'}</p>
       </div>
     </>}
     {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="icon-button cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
     {stage === 'RECORDING' && <>
-      <div className="live-toolbar"><span><i/>Live</span><span>{DURATION - elapsed}s</span><button className="icon-button" onClick={reset} aria-label="Stop drip score"><X size={18}/></button></div>
+      <div className="live-toolbar"><span><i/>Live</span><span>{DURATION - elapsed}s</span><button className="icon-button" onClick={reset} aria-label="Stop fit check"><X size={18}/></button></div>
       <div className="runway-progress"><div style={{ width: `${elapsed / DURATION * 100}%` }}/></div>
       <div className="audience-status" role="status">{status}</div>
       <p className="pose-cue">{elapsed < 4 ? 'Show your outfit' : elapsed < 8 ? 'Try a turn' : elapsed < 12 ? 'Show the details' : 'Photos up next'}</p>

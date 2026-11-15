@@ -11,7 +11,7 @@ export function StyleResults({ result, onReset, onRetake }: { result: FitResult;
   useEffect(() => { soundEffects.playResultFanfare(); }, []);
   const download = () => {
     const link = document.createElement('a');
-    link.href = result.capturedPhotos[photo]; link.download = `drip-score-${photo + 1}.jpg`; link.click();
+    link.href = result.capturedPhotos[photo]; link.download = `oko-${photo + 1}.jpg`; link.click();
     setNotice('Your photo is ready to save.');
   };
   const copy = async () => {
@@ -20,7 +20,7 @@ export function StyleResults({ result, onReset, onRetake }: { result: FitResult;
   };
   const share = async () => {
     if (!navigator.share) { await copy(); return; }
-    try { await navigator.share({ title: 'My Drip Score', text: caption }); }
+    try { await navigator.share({ title: 'My oko look', text: caption }); }
     catch (e) { if (!(e instanceof Error && e.name === 'AbortError')) setNotice('Sharing is unavailable. Save your photo and copy the caption instead.'); }
   };
   return <div className="style-results">

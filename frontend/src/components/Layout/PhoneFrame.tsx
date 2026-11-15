@@ -1,5 +1,10 @@
 import type { ReactNode } from 'react';
-import Link from 'next/link';
+
+/**
+ * Mobile-only layout: one phone-width column (max ~470px) centred on the paper
+ * background. The camera stage fills the column's full height. Navigation lives
+ * inside each stage's own overlay (see the READY screen), not in a page header.
+ */
 export function PhoneFrame({ children }: { children: ReactNode }) {
-  return <div className="studio-shell"><header className="studio-nav"><Link className="wordmark" href="/">drip score<span>®</span></Link><Link href="/feed">My looks ↗</Link></header><main className="studio-main"><div className="camera-column"><div className="camera-stage">{children}</div></div></main></div>;
+  return <div className="studio-shell"><main className="camera-column">{children}</main></div>;
 }

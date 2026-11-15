@@ -51,7 +51,7 @@ export class RequestBudget {
       const blocked = state.blocked[model];
       if (blocked?.until > now) throw new ApiError(blocked.message, 429, blocked.code, Math.ceil((blocked.until - now) / 1000));
       const session = state.sessions[sessionId] ?? { live: 0, report: 0, touched: now };
-      if (session[kind] >= (kind === 'live' ? 2 : 1)) throw new ApiError('This drip score has used its analysis budget. Start a new drip score for another review.', 429, 'SESSION_BUDGET_REACHED');
+      if (session[kind] >= (kind === 'live' ? 2 : 1)) throw new ApiError('This fit check has used its analysis budget. Start a new fit check for another review.', 429, 'SESSION_BUDGET_REACHED');
       state.calls = state.calls.filter(t => now - t < 60_000);
       if (state.dailyCalls >= this.options.perDay) throw new ApiError('The app’s daily request budget has been reached. AI calls are paused for today.', 429, 'APP_DAILY_BUDGET');
       const waitUntil = Math.max(state.lastCall + this.options.minGapMs,

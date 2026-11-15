@@ -1,4 +1,4 @@
-# Deploy Drip Score to Firebase App Hosting
+# Deploy oko to Firebase App Hosting
 
 Live URL: https://drip-score--devfest2026-41803.us-central1.hosted.app
 

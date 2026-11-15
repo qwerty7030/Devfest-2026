@@ -75,10 +75,10 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
   };
 
   const handleShare = async () => {
-    const text = `Check out my Drip Score post! Scored ${result.overallScore}/100 (${result.archetype}) on Drip Score AI at DevFest 2026.`;
+    const text = `Check out my oko look! Scored ${result.overallScore}/100 (${result.archetype}) on oko at DevFest 2026.`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'My Drip Score Post', text });
+        await navigator.share({ title: 'My oko look', text });
         return;
       } catch {
         // Fallback to clipboard
@@ -93,7 +93,7 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
     const activePhoto = photos[currentPhotoIdx];
     const a = document.createElement('a');
     a.href = activePhoto;
-    a.download = `drip-score-post-${Date.now()}.jpg`;
+    a.download = `oko-look-${Date.now()}.jpg`;
     a.click();
   };
 
@@ -162,7 +162,7 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
                   </span>
                 </div>
                 <span className="text-[10px] text-zinc-400">
-                  DevFest 2026 • Live Drip Score
+                  DevFest 2026 • oko
                 </span>
               </div>
             </div>
@@ -179,11 +179,11 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
           >
             <img
               src={photos[currentPhotoIdx]}
-              alt={`Drip Score Pose ${currentPhotoIdx + 1}`}
+              alt={`oko pose ${currentPhotoIdx + 1}`}
               className="w-full h-full object-cover object-center"
             />
 
-            {/* Drip Score Watermark Badge on Top Right */}
+            {/* oko watermark badge on Top Right */}
             <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-md border border-pink-500/40 px-2.5 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
               <span className="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-amber-300">
                 {result.overallScore}/100 DRIP

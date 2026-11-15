@@ -62,7 +62,7 @@ export const LiveHeader: React.FC<LiveHeaderProps> = ({
             {isMuted ? <VolumeX className="w-4 h-4 text-zinc-400" /> : <Volume2 className="w-4 h-4 text-pink-400" />}
           </button>
 
-          {/* Close/Stop Drip Score */}
+          {/* Close/Stop the live session */}
           <button
             onClick={onStop}
             aria-label="Cancel live stream"

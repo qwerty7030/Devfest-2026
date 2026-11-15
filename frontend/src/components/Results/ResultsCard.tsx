@@ -36,11 +36,11 @@ export const ResultsCard: React.FC<ResultsCardProps> = ({
   }, []);
 
   const handleShare = async () => {
-    const text = `🔥 Drip Score Score: ${result.overallScore}/100!\nStyle Archetype: ${result.archetype}\nRated on Drip Score AI at DevFest 2026.`;
+    const text = `🔥 oko score: ${result.overallScore}/100!\nStyle Archetype: ${result.archetype}\nRated on oko at DevFest 2026.`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'My Drip Score',
+          title: 'My oko look',
           text,
         });
         return;
@@ -69,7 +69,7 @@ export const ResultsCard: React.FC<ResultsCardProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-pink-400 font-mono text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-4 h-4" />
-            <span>Drip Score Complete</span>
+            <span>Fit Check Complete</span>
           </div>
 
           <button
@@ -81,7 +81,7 @@ export const ResultsCard: React.FC<ResultsCardProps> = ({
           </button>
         </div>
 
-        {/* Big Drip Score & Archetype Card */}
+        {/* Big score & archetype card */}
         <div className="relative rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-pink-500/30 p-5 text-center shadow-2xl overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
