@@ -32,6 +32,7 @@ export interface GarmentItem {
 }
 
 export interface FitResult {
+  streamComments?: { text: string; feedbackType: 'compliment' | 'suggestion'; suggestion?: string }[];
   id?: string;
   aiScore?: number;
   rulesScore?: number;

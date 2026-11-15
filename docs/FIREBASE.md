@@ -7,7 +7,9 @@ Verified on November 15, 2026: successful App Hosting rollout, home/feed pages, 
 Project: `devfest2026-41803`. Intended backend: `drip-score` in `us-central1`.
 Uses Firebase App Hosting's Next.js adapter for the UI and same-origin server API routes.
 The Firebase browser SDK configuration does not authenticate deployments and is not the Gemini server key.
-No Analytics, Firestore, or Storage SDK is needed just to host this app. Saved looks remain in each browser's IndexedDB.
+Firestore stores private score records and up to six selected live-session comments at `users/{anonymousUid}/scores/{lookId}`. Firebase Authentication signs each browser in anonymously; this identity persists in that browser's site data, without a sign-in screen. Clearing site data loses access to that anonymous identity; cross-device account recovery requires adding a permanent sign-in method later. Photos remain in IndexedDB and are never written to Firestore. Demo scores stay local. No Analytics or Cloud Storage integration is enabled.
+
+`firestore.rules` allows only the matching authenticated UID to read/write/delete their records. Writes allow only score metadata, the rule breakdown, and bounded live-comment text, with bounded numeric values and no photo fields. This is a personal history, not a tamper-proof public leaderboard: a user can modify their own records. Deploy rule changes with `firebase deploy --only firestore --project devfest2026-41803`.
 
 Prerequisites: Firebase CLI 14.4+, an authenticated project owner/deployer, and the project's Blaze plan already enabled.
 

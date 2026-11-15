@@ -82,10 +82,13 @@ export function App() {
       if (!reportRequestRef.current || reportRequestRef.current.photos !== signature) reportRequestRef.current = { photos: signature, id: crypto.randomUUID() };
       const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(review, ctrl.signal, sessionIdRef.current, reportRequestRef.current.id);
       if (ctrl.signal.aborted) return;
-      const post: FitPost = { ...data, id: sessionIdRef.current, source: demo ? 'demo' : 'ai', capturedPhotos: [...taken, ...runwayPhotos.current], capturedSnapshotUrl: taken[0], timestamp: Date.now() };
+      const streamComments = live.comments.filter(c => c.feedbackType).slice(0, 6).map(c => ({
+        text: c.comment, feedbackType: c.feedbackType!, ...(c.suggestion ? { suggestion: c.suggestion } : {}),
+      }));
+      const post: FitPost = { ...data, streamComments, id: sessionIdRef.current, source: demo ? 'demo' : 'ai', capturedPhotos: [...taken, ...runwayPhotos.current], capturedSnapshotUrl: taken[0], timestamp: Date.now() };
       setResult(post); setStage('RESULTS');
       try { await saveLook(post); if (!ctrl.signal.aborted) router.push('/feed'); }
-      catch { setError('This look could not be saved. Keep this tab open to view and download your photos.'); }
+      catch (e) { setError(e instanceof Error ? e.message : 'This look could not be saved. Keep this tab open to view and download your photos.'); }
     } catch (e) { if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : 'Could not review your outfit.'); }
   };
   if (stage === 'RESULTS' && result) return <LooksFeed latest={result} onCamera={reset} saveNotice={error ?? undefined}/>;
@@ -102,7 +105,7 @@ export function App() {
         {configured === false && !demo && <p className="service-note">AI is not configured.</p>}
         <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>{camera.isCameraActive ? 'Start drip score' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</button>
         <button className="text-button demo-action" onClick={camera.toggleTestMode}>{demo ? 'Use my camera' : 'Try demo'}</button>
-        <p className="privacy-note">{demo ? 'Sample session · no API calls' : 'Clips go to Gemini. Photos save to this browser.'}</p>
+        <p className="privacy-note">{demo ? 'Sample session · no AI calls' : 'Clips to Gemini. Scores to Firestore. Photos stay here.'}</p>
         <details className="version-info"><summary>Connection</summary><p>{process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p></details>
       </div>
     </>}

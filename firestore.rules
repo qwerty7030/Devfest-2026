@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function score(n) { return n is number && n >= 0 && n <= 100; }
+    function validComment(comments, i) {
+      return comments.size() <= i || (comments[i] is map
+        && comments[i].keys().hasOnly(['text', 'feedbackType', 'suggestion'])
+        && comments[i].keys().hasAll(['text', 'feedbackType'])
+        && comments[i].text is string && comments[i].text.size() > 0 && comments[i].text.size() <= 220
+        && comments[i].feedbackType in ['compliment', 'suggestion']
+        && (!('suggestion' in comments[i]) || (comments[i].suggestion is string && comments[i].suggestion.size() <= 180)));
+    }
+    function valid(data, id) {
+      return data.keys().hasOnly(['version', 'id', 'overallScore', 'aiScore', 'rulesScore', 'rules', 'archetype', 'timestamp', 'source', 'streamComments'])
+        && data.keys().hasAll(['version', 'id', 'overallScore', 'archetype', 'timestamp', 'source'])
+        && data.version == 1 && data.id == id && id.size() <= 80
+        && score(data.overallScore)
+        && (!('aiScore' in data) || score(data.aiScore))
+        && (!('rulesScore' in data) || score(data.rulesScore))
+        && data.archetype is string && data.archetype.size() <= 60
+        && data.timestamp is number && data.timestamp > 0
+        && data.source in ['ai', 'demo']
+        && (!('streamComments' in data) || (data.streamComments is list && data.streamComments.size() <= 6
+          && validComment(data.streamComments, 0) && validComment(data.streamComments, 1)
+          && validComment(data.streamComments, 2) && validComment(data.streamComments, 3)
+          && validComment(data.streamComments, 4) && validComment(data.streamComments, 5)))
+        && (!('rules' in data) || (data.rules is map
+          && data.rules.keys().hasOnly(['totalScore', 'fitScore', 'pointsScore', 'hierarchyScore', 'continuityScore', 'fitGateMultiplier', 'totalPoints', 'notes'])
+          && data.rules.totalScore is number && data.rules.totalScore >= 0 && data.rules.totalScore <= 1
+          && data.rules.fitScore is number && data.rules.fitScore >= 0 && data.rules.fitScore <= 1
+          && data.rules.pointsScore is number && data.rules.pointsScore >= 0 && data.rules.pointsScore <= 1
+          && data.rules.hierarchyScore is number && data.rules.hierarchyScore >= 0 && data.rules.hierarchyScore <= 1
+          && data.rules.continuityScore is number && data.rules.continuityScore >= 0 && data.rules.continuityScore <= 1
+          && data.rules.fitGateMultiplier is number && data.rules.fitGateMultiplier >= 0 && data.rules.fitGateMultiplier <= 1
+          && data.rules.totalPoints is int && data.rules.totalPoints >= 0 && data.rules.totalPoints <= 16
+          && data.rules.notes is list && data.rules.notes.size() <= 8));
+    }
+    match /users/{uid}/scores/{id} {
+      allow get, list, delete: if owner(uid);
+      allow create, update: if owner(uid) && valid(request.resource.data, id);
+    }
+  }
+}
