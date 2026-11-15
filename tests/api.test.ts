@@ -56,29 +56,35 @@ test('unconfigured AI is an explicit 503, never a fake successful review', async
   }
 });
 
-test('analysis accepts a single visible garment and asks Gemini to allow partial framing', async () => {
+test('one final request combines three photos, accepts partial framing, and blends both scores', async () => {
   const originalFetch = globalThis.fetch;
   const key = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = 'unit-test-key';
   let sent = '';
+  let calls = 0;
   globalThis.fetch = async (_url, init) => {
+    calls++;
     sent = String(init?.body);
     return Response.json({ candidates: [{ content: { role: 'model', parts: [{ text: JSON.stringify({
       person_visible: true, overallScore: 89.7, archetype: 'Relaxed utility', summary: 'Olive layers and balanced proportions.',
-      caption: 'My fit, my rules.', garments: [{ category: 'Outerwear', description: 'Olive jacket', color: 'Olive', confidence: .9 }],
+      caption: 'My fit, my rules.', garments: [{ category: 'Outerwear', description: 'Olive jacket', color: 'Olive', confidence: .9,
+        scoring: { category: 'outerwear', fitQuality: .9, drapeHarmony: .9, points: 2, hierarchy: 'high', colorFamily: 'olive', visualWeight: 'medium' } }],
       topComments: [{ username: 'style.editor', comment: 'The layering works.' }],
     }) }] }, finishReason: 'STOP' }] });
   };
   try {
-    const response = await analyze(request({ snapshotBase64: jpeg }));
+    const response = await analyze(request({ snapshotsBase64: [jpeg, jpeg, jpeg] }));
     assert.equal(response.status, 200);
     const { data } = await response.json();
-    assert.equal(data.overallScore, 90);
+    assert.equal(data.aiScore, 90);
+    assert.equal(data.overallScore, Math.round((data.aiScore + data.rulesScore) / 2 * 10) / 10);
     assert.equal(data.source, 'ai');
     assert.equal(data.garments[0].description, 'Olive jacket');
     assert.match(sent, /\/9j\/AA==/);
     assert.match(sent, /do not require a face, full body, shoes, or multiple garments/);
     assert.equal(data.garments.length, 1);
+    assert.equal(calls, 1);
+    assert.equal(JSON.parse(sent).contents[0].parts.filter((p: { inlineData?: unknown }) => p.inlineData).length, 3);
     assert.equal(response.headers.get('Cache-Control'), 'no-store');
   } finally {
     globalThis.fetch = originalFetch;

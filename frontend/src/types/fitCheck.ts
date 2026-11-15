@@ -32,6 +32,11 @@ export interface GarmentItem {
 }
 
 export interface FitResult {
+  id?: string;
+  aiScore?: number;
+  rulesScore?: number;
+  rules?: import('../../../lib/fitcheck/outfitScore').OutfitScoreBreakdown;
+  scoringGarments?: import('../../../lib/fitcheck/outfitScore').Garment[];
   source?: 'ai' | 'demo';
   overallScore: number;
   archetype: string;

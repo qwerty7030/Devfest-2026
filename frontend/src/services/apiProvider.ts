@@ -4,9 +4,9 @@ import { randomUsername } from '../../../lib/fitcheck/fakeUsers';
 import type { OutfitClipSource } from './clipCapture';
 import { OutfitSession } from './outfitSession';
 
-export async function analyzeFit(photo: string, signal: AbortSignal, sessionId = crypto.randomUUID(), requestId = crypto.randomUUID()): Promise<FitResult> {
+export async function analyzeFit(photo: string | string[], signal: AbortSignal, sessionId = crypto.randomUUID(), requestId = crypto.randomUUID()): Promise<FitResult> {
   const res = await fetch('/api/fitcheck/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ snapshotBase64: photo, sessionId, requestId }), signal });
+    body: JSON.stringify({ snapshotsBase64: Array.isArray(photo) ? photo : [photo], sessionId, requestId }), signal });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error || 'Could not analyze your outfit. Please try again.');
   return { ...body.data, capturedPhotos: [], timestamp: Date.now() };

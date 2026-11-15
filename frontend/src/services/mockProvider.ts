@@ -1,5 +1,6 @@
 import type { FitCheckProvider } from './fitCheckProvider';
 import type { LiveComment, FitResult } from '../types/fitCheck';
+import { Category, HierarchyZone, VisualWeight, evaluateOutfit, type Garment } from '../../../lib/fitcheck/outfitScore';
 
 const MOCK_USERS = [
   {
@@ -295,8 +296,17 @@ export class MockFitCheckProvider implements FitCheckProvider {
 
     const selectedArchetype = SAMPLE_ARCHETYPES[Math.floor(Math.random() * SAMPLE_ARCHETYPES.length)];
 
+    // Explicit sample features only. Real sessions always use Gemini observations.
+    const categoryMap: Record<string, Category> = { Outerwear: Category.OUTERWEAR, Tops: Category.TOP, Bottoms: Category.BOTTOM, Footwear: Category.SHOES, Accessories: Category.ACCESSORY };
+    const scoringGarments: Garment[] = selectedArchetype.garments.map((g, i) => ({ name: g.description,
+      category: categoryMap[g.category] ?? Category.ACCESSORY, fitQuality: .9, drapeHarmony: .9,
+      points: i === 0 ? 2 : 1, hierarchy: i === 0 ? HierarchyZone.HIGH : i === 1 ? HierarchyZone.MID : HierarchyZone.LOW,
+      colorFamily: g.color.toLowerCase(), visualWeight: VisualWeight.MEDIUM }));
+    const rules = evaluateOutfit(scoringGarments), rulesScore = Math.round(rules.totalScore * 1000) / 10;
+
     return {
-      overallScore: selectedArchetype.score,
+      overallScore: Math.round((selectedArchetype.score + rulesScore) / 2 * 10) / 10,
+      aiScore: selectedArchetype.score, rulesScore, rules, scoringGarments,
       archetype: selectedArchetype.archetype,
       summary: selectedArchetype.summary,
       caption: selectedArchetype.caption,

@@ -41,11 +41,12 @@ No wearer anywhere in the rolling window returns `person_visible: false`, `obser
 
 ## `POST /api/fitcheck/analyze`
 
-Request: `{ "snapshotBase64": "data:image/jpeg;base64,..." }`. Raw JPEG base64 also works. The client analyzes the first photo and retains the other photo locally.
+Request: `{ "snapshotsBase64": ["data:image/jpeg;base64,..."] }`, with one to three JPEGs from the same outfit session. Legacy `snapshotBase64` and raw JPEG base64 still work. The app sends two runway snapshots and the last automatic posed photo in one provider call. Garments are deduplicated across views; the feed retains all six captures locally.
 
 Response: `{ "status": "success", "data": { ... } }`, where `data` includes:
 
-- `overallScore` (0–100), `archetype`, `summary`, `caption`, and `source: "ai"`.
+- `overallScore` (0–100), `aiScore` (0–100), `rulesScore` (0–100), `archetype`, `summary`, `caption`, and `source: "ai"`. The final `overallScore` is the 50/50 average rounded to one decimal.
+- `rules`: the supplied scoring function's normalized 0–1 breakdown, points, fit gate, and notes. `scoringGarments` contains Gemini's visible garment feature estimates. Missing/invalid scoring features reject the report rather than inventing defaults.
 - `garments`: up to eight items with `category`, `description`, `color`, `confidence` (0–1), optional `highlight` and percentage tag positions.
 - `topComments`: up to three simulated audience comments with local avatar URLs, generated identifiers, username, comment, and display fields.
 - `likesCount: 0`. Social engagement is not fabricated by this endpoint.
@@ -54,7 +55,7 @@ Client-side `capturedPhotos`, `capturedSnapshotUrl`, and `timestamp` are appende
 
 ## Limits and errors
 
-Each WebM/MP4 clip is limited to four million decoded bytes and 0.5–6 seconds, and its container signature is checked. At most two clips and eight seconds are accepted. The comments request stream is capped at 12 MB; ordinary 1 Mbps clips are substantially smaller. Hosts may impose lower body limits. JPEG fallback frames must have a JPEG signature and be under 2,000,000 base64 characters, with strictly increasing offsets. Photo analysis requests remain capped at 3 MB. The camera downsizes JPEG captures to at most 960 pixels wide and quality 0.78. Gemini deadlines are 12 seconds for commentary and 25 seconds for analysis; cancellation propagates to the model request.
+Each WebM/MP4 clip is limited to four million decoded bytes and 0.5–6 seconds, and its container signature is checked. At most two clips and eight seconds are accepted. The comments request stream is capped at 12 MB; ordinary 1 Mbps clips are substantially smaller. Hosts may impose lower body limits. JPEG fallback frames must have a JPEG signature and be under 2,000,000 base64 characters, with strictly increasing offsets. Photo analysis requests are capped at 6.1 MB, with at most three JPEGs and the existing per-photo limit. The camera downsizes JPEG captures to at most 960 pixels wide and quality 0.78. Gemini deadlines are 12 seconds for commentary and 25 seconds for analysis; cancellation propagates to the model request.
 
 Failures use `{ "error": "A user-readable explanation", "code": "optional machine-readable reason", "retryAfterSeconds": 60 }`: 400 for malformed input, 413 for oversized payloads, 422 for no discernible outfit, 502 for incomplete analysis, and 503 for missing configuration or provider failure. A 429 distinguishes `APP_COOLDOWN`, `APP_DAILY_BUDGET`, `SESSION_BUDGET_REACHED`, `AI_RATE_LIMITED`, and `AI_DAILY_QUOTA_EXHAUSTED`. Retryable cooldowns include `Retry-After`. Provider cooldowns are persisted per model, so another tab/session cannot immediately hammer a blocked model. SDK attempts are fixed at one. Failed real sessions do not return sample scores. Demo mode uses only the client mock provider and is explicitly labeled.
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "typecheck": "tsc --noEmit",
     "test": "tsx --conditions=react-server --import ./tests/setup.mjs --test tests/*.test.ts",

@@ -1,150 +1,121 @@
 'use client';
-
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, FlipHorizontal, Volume2, VolumeX, RefreshCw, ArrowUpRight, Sparkles, X } from 'lucide-react';
-import type { AppState, FitResult } from './types/fitCheck';
+import { useRouter } from 'next/navigation';
+import { Camera, FlipHorizontal, RefreshCw, Volume2, VolumeX, X } from 'lucide-react';
+import type { AppState } from './types/fitCheck';
 import type { OutfitObservation } from '../../lib/fitcheck/types';
 import { useCamera } from './hooks/useCamera';
 import { useLiveReactions } from './hooks/useLiveReactions';
-import { usePersonDetector } from '../../lib/fitcheck/usePersonDetector';
 import { startLiveFeed, analyzeFit } from './services/apiProvider';
 import { createOutfitClipSource } from './services/clipCapture';
 import { mockFitCheckProvider } from './services/mockProvider';
+import { saveLook, type FitPost } from './services/fitFeed';
 import { soundEffects } from './services/soundEffects';
 import { PhoneFrame } from './components/Layout/PhoneFrame';
 import { CameraPreview } from './components/Camera/CameraPreview';
-import { SilhouetteGuide } from './components/Camera/SilhouetteGuide';
 import { CountdownOverlay } from './components/Countdown/CountdownOverlay';
-import { LiveHeader } from './components/LiveOverlay/LiveHeader';
-import { CoachingCue } from './components/LiveOverlay/CoachingCue';
 import { LiveChat } from './components/LiveOverlay/LiveChat';
-import { FloatingReactions } from './components/LiveOverlay/FloatingReactions';
-import { ReactionBar } from './components/LiveOverlay/ReactionBar';
-import { ScannerOverlay } from './components/Analyzing/ScannerOverlay';
 import { PosingScreen } from './components/Posing/PosingScreen';
-import { StyleResults } from './components/Results/StyleResults';
+import { LooksFeed } from './components/Results/LooksFeed';
 import './studio.css';
 
 const DURATION = 15;
-
 export function App() {
+  const router = useRouter();
   const [stage, setStage] = useState<AppState>('READY');
-  const [muted, setMuted] = useState(true);
-  const [elapsed, setElapsed] = useState(0);
-  const [result, setResult] = useState<FitResult | null>(null);
-  const [snapshot, setSnapshot] = useState<string>();
-  const [photos, setPhotos] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState('Connecting your AI audience…');
+  const [muted, setMuted] = useState(true), [elapsed, setElapsed] = useState(0);
+  const [result, setResult] = useState<FitPost | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]), [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState('Watching your outfit…');
   const [configured, setConfigured] = useState<boolean | null>(null);
-  const [activeModel, setActiveModel] = useState<string>('Checking AI connection…');
-  const [showGuide, setShowGuide] = useState(false);
+  const [activeModel, setActiveModel] = useState('Connecting…');
   const [observations, setObservations] = useState<OutfitObservation[]>([]);
-  const camera = useCamera();
+  const camera = useCamera(), live = useLiveReactions();
   const { stopCamera, videoRef } = camera;
-  const live = useLiveReactions();
-  const detector = usePersonDetector(camera.videoRef, camera.isCameraActive && !camera.isTestMode && stage === 'READY');
+  const capture = camera.captureSnapshot, demo = camera.isTestMode;
   const analysisRef = useRef<AbortController | null>(null);
-  const sessionIdRef = useRef('');
-  const reportRequestRef = useRef<{ photo: string; id: string } | null>(null);
-
+  const sessionIdRef = useRef(''), runwayPhotos = useRef<string[]>([]);
+  const reportRequestRef = useRef<{ photos: string; id: string } | null>(null);
   useEffect(() => { soundEffects.setMuted(muted); }, [muted]);
   useEffect(() => {
     const ctrl = new AbortController();
     fetch('/api/health', { signal: ctrl.signal, cache: 'no-store' }).then(r => r.json()).then(d => {
-      setConfigured(d.aiConfigured);
-      setActiveModel(typeof d.model === 'string' ? d.model : 'Restart server to load the current version');
-    }).catch(() => { if (!ctrl.signal.aborted) setActiveModel('AI server unavailable'); });
+      setConfigured(d.aiConfigured); setActiveModel(d.model || 'Restart server');
+    }).catch(() => { if (!ctrl.signal.aborted) setActiveModel('Server unavailable'); });
     return () => ctrl.abort();
   }, []);
   useEffect(() => () => analysisRef.current?.abort(), []);
-  useEffect(() => {
-    if (stage === 'RESULTS') stopCamera();
-  }, [stage, stopCamera]);
-
+  useEffect(() => { if (stage === 'RESULTS') stopCamera(); }, [stage, stopCamera]);
   const { addComment, triggerReaction, startViewerCounter, stopViewerCounter } = live;
-  const capture = camera.captureSnapshot;
-  const demo = camera.isTestMode;
   useEffect(() => {
     if (stage !== 'RECORDING') return;
-    setElapsed(0);
-    startViewerCounter();
-    setStatus(demo ? 'Demo audience · sample reactions' : 'Connecting your AI audience…');
-    let runwayStarted: number | null = demo ? Date.now() : null;
+    setElapsed(0); startViewerCounter();
+    setStatus(demo ? 'Demo' : 'Watching your outfit…');
+    let started: number | null = demo ? Date.now() : null;
     if (!sessionIdRef.current) sessionIdRef.current = crypto.randomUUID();
     let stop: () => void;
     if (demo) { mockFitCheckProvider.startLiveFeed(addComment, triggerReaction); stop = () => mockFitCheckProvider.stopLiveFeed(); }
     else stop = startLiveFeed(createOutfitClipSource(() => videoRef.current, capture), addComment, setStatus, items => {
-      setObservations(items);
-      if (items.length && runwayStarted === null) runwayStarted = Date.now();
+      setObservations(items); if (items.length && started === null) started = Date.now();
     }, sessionIdRef.current);
     const timer = setInterval(() => {
-      const seconds = runwayStarted === null ? 0 : Math.min(DURATION, Math.floor((Date.now() - runwayStarted) / 1000));
+      const seconds = started === null ? 0 : Math.min(DURATION, Math.floor((Date.now() - started) / 1000));
       setElapsed(seconds);
-      if (seconds >= DURATION) {
-        const photo = capture();
-        if (photo) setSnapshot(photo);
-        soundEffects.playShutter();
-        setStage('POSING');
+      if (runwayPhotos.current.length < 3 && seconds >= 3 + runwayPhotos.current.length * 4) {
+        const photo = capture(); if (photo) runwayPhotos.current.push(photo);
       }
+      if (seconds >= DURATION) setStage('POSING');
     }, 200);
     return () => { clearInterval(timer); stop(); stopViewerCounter(); };
   }, [stage, demo, capture, videoRef, addComment, triggerReaction, startViewerCounter, stopViewerCounter]);
-
-  const reset = () => { analysisRef.current?.abort(); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setSnapshot(undefined); setStage('READY'); };
-  const begin = () => { sessionIdRef.current = crypto.randomUUID(); reportRequestRef.current = null; live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
+  const reset = () => { analysisRef.current?.abort(); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('READY'); };
+  const begin = () => { sessionIdRef.current = crypto.randomUUID(); reportRequestRef.current = null; runwayPhotos.current = []; setObservations([]); live.clearLiveState(); setError(null); setResult(null); setPhotos([]); setStage('COUNTDOWN'); };
   const countdownFinished = useCallback(() => setStage('RECORDING'), []);
   const finish = async (taken: string[]) => {
     if (!taken.length || analysisRef.current && !analysisRef.current.signal.aborted && stage === 'ANALYZING') return;
     analysisRef.current?.abort();
-    const ctrl = new AbortController();
-    analysisRef.current = ctrl;
-    setPhotos(taken); setSnapshot(taken[0]); setStage('ANALYZING'); setError(null);
+    const ctrl = new AbortController(); analysisRef.current = ctrl;
+    setPhotos(taken); setStage('ANALYZING'); setError(null);
+    const review = [...runwayPhotos.current.slice(0, 2), taken[taken.length - 1]].slice(-3);
     try {
-      if (!reportRequestRef.current || reportRequestRef.current.photo !== taken[0]) reportRequestRef.current = { photo: taken[0], id: crypto.randomUUID() };
-      const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(taken[0], ctrl.signal, sessionIdRef.current, reportRequestRef.current.id);
+      const signature = review.join('|');
+      if (!reportRequestRef.current || reportRequestRef.current.photos !== signature) reportRequestRef.current = { photos: signature, id: crypto.randomUUID() };
+      const data = demo ? await mockFitCheckProvider.analyzeFit(taken) : await analyzeFit(review, ctrl.signal, sessionIdRef.current, reportRequestRef.current.id);
       if (ctrl.signal.aborted) return;
-      setResult({ ...data, source: demo ? 'demo' : 'ai', capturedPhotos: taken, capturedSnapshotUrl: taken[0] });
-      setStage('RESULTS');
-    } catch (e) {
-      if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
-    }
+      const post: FitPost = { ...data, id: sessionIdRef.current, source: demo ? 'demo' : 'ai', capturedPhotos: [...taken, ...runwayPhotos.current], capturedSnapshotUrl: taken[0], timestamp: Date.now() };
+      setResult(post); setStage('RESULTS');
+      try { await saveLook(post); if (!ctrl.signal.aborted) router.push('/feed'); }
+      catch { setError('This look could not be saved. Keep this tab open to view and download your photos.'); }
+    } catch (e) { if (!ctrl.signal.aborted) setError(e instanceof Error ? e.message : 'Could not review your outfit.'); }
   };
-
-  return <PhoneFrame><div className="relative w-full h-full overflow-hidden bg-black text-white">
+  if (stage === 'RESULTS' && result) return <LooksFeed latest={result} onCamera={reset} saveNotice={error ?? undefined}/>;
+  return <PhoneFrame><div className="camera-content">
     <CameraPreview {...camera} onRetry={camera.startCamera} onEnableTestMode={camera.toggleTestMode}/>
     {stage === 'READY' && <>
-      <div className="camera-toolbar"><span className="camera-mode"><i/>{demo ? 'DEMO STUDIO' : 'CAMERA STUDIO'}</span><div>
-        <button onClick={camera.toggleMirror} aria-label="Mirror camera" aria-pressed={camera.isMirrored} title="Mirror camera"><FlipHorizontal size={17}/></button>
-        <button onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera" title="Switch camera"><RefreshCw size={17}/></button>
-        <button onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'} title={muted ? 'Enable sound' : 'Mute sound'}>{muted ? <VolumeX size={17}/> : <Volume2 size={17}/>}</button>
+      <div className="camera-toolbar"><span>{demo ? 'Demo' : 'Camera'}</span><div>
+        <button className="icon-button" onClick={camera.toggleMirror} aria-label="Mirror camera" aria-pressed={camera.isMirrored}><FlipHorizontal size={18}/></button>
+        <button className="icon-button" onClick={camera.toggleFacingMode} disabled={demo || !camera.isCameraActive} aria-label="Switch camera"><RefreshCw size={18}/></button>
+        <button className="icon-button" onClick={() => setMuted(v => !v)} aria-label={muted ? 'Enable sound' : 'Mute sound'}>{muted ? <VolumeX size={18}/> : <Volume2 size={18}/>}</button>
       </div></div>
-      {(camera.isCameraActive || demo) && <SilhouetteGuide visible={!demo && showGuide}/>}
-      {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome">
-        <div className="viewfinder"><span/><Camera size={38} strokeWidth={1}/><span/></div>
-        <span className="eyebrow">A SPACE FOR YOUR STYLE</span><h2>Show us<br/>your style.</h2><p>A full outfit or just a detail.<br/>Start wherever you are.</p>
-      </div>}
+      {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome"><Camera size={30} strokeWidth={1}/><h1>Show your fit.</h1></div>}
       <div className="studio-controls">
-        {camera.isCameraActive && <div className="framing-status"><span/>{demo ? 'Sample session · no AI calls' : detector.present ? 'Ready when you are. Partial outfits work too.' : 'Start anytime. We’ll review what’s visible.'}</div>}
-        {configured === false && !demo && <p className="service-note">You can start and take photos. AI reviews need a server API key.</p>}
-        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>
-          <Camera size={19}/>{camera.isCameraActive ? 'Start my fit check' : camera.isStarting ? 'Waiting for camera…' : 'Enable camera'}<ArrowUpRight size={20}/></button>
-        {camera.isCameraActive && !demo && <button className="demo-action" aria-pressed={showGuide} onClick={() => setShowGuide(v => !v)}>{showGuide ? 'Hide optional framing guide' : 'Show optional framing guide'}</button>}
-        <button className="demo-action" onClick={camera.toggleTestMode}><Sparkles size={14}/>{demo ? 'Back to my camera' : 'Just looking? Try the demo'}</button>
-        <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Short camera clips go to Google Gemini during your session. We don’t store them.'}</p>
-        <p className="privacy-note" aria-label="App version and AI model">Version {process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p>
+        {configured === false && !demo && <p className="service-note">AI is not configured.</p>}
+        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>{camera.isCameraActive ? 'Start fit check' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</button>
+        <button className="text-button demo-action" onClick={camera.toggleTestMode}>{demo ? 'Use my camera' : 'Try demo'}</button>
+        <p className="privacy-note">{demo ? 'Sample session · no API calls' : 'Clips go to Gemini. Photos save to this browser.'}</p>
+        <details className="version-info"><summary>Connection</summary><p>{process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p></details>
       </div>
     </>}
-    {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
-    {stage === 'RECORDING' && <><LiveHeader viewerCount={live.viewerCount} remainingSeconds={DURATION-elapsed} totalDurationSeconds={DURATION} isMuted={muted} onToggleMute={() => setMuted(v=>!v)} onStop={reset}/>
-      <div className="audience-status" role="status">{status}</div><CoachingCue elapsedSeconds={elapsed} totalDurationSeconds={DURATION}/>
-      {!demo && <div className="outfit-observations" aria-label="Outfit pieces recognized across your live clip">{observations.length ? <><span>YOUR OUTFIT SO FAR</span>{observations.map(item => <span key={item.id}>{item.description}</span>)}</> : <p>Just stand in front of the camera and show off. We’re following your outfit as you move.</p>}</div>}
-      <LiveChat comments={demo || observations.length > 0 ? live.comments : []}/><FloatingReactions reactions={live.reactions}/>
-      <ReactionBar onSendComment={text => addComment({ id: crypto.randomUUID(), username: 'you', avatarUrl: '/avatar.svg', comment: text, timestamp: Date.now(), badge: 'Host' })} onSendReaction={triggerReaction}/></>}
+    {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="icon-button cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
+    {stage === 'RECORDING' && <>
+      <div className="live-toolbar"><span><i/>Live</span><span>{DURATION - elapsed}s</span><button className="icon-button" onClick={reset} aria-label="Stop fit check"><X size={18}/></button></div>
+      <div className="runway-progress"><div style={{ width: `${elapsed / DURATION * 100}%` }}/></div>
+      <div className="audience-status" role="status">{status}</div>
+      <p className="pose-cue">{elapsed < 4 ? 'Show your outfit' : elapsed < 8 ? 'Try a turn' : elapsed < 12 ? 'Show the details' : 'Photos up next'}</p>
+      <LiveChat comments={demo || observations.length > 0 ? live.comments : []}/>
+    </>}
     {stage === 'POSING' && <PosingScreen onCapturePhoto={capture} onFinishPosing={finish} onCancel={reset}/>}
-    {stage === 'ANALYZING' && <><ScannerOverlay snapshotUrl={snapshot} isDemo={demo}/>{error ? <div className="analysis-error" role="alert"><span className="eyebrow">LET’S TRY THAT AGAIN</span><h2>A small style pause.</h2><p>{error}</p><button className="primary-action" onClick={() => { analysisRef.current?.abort(); void finish(photos); }}>Retry analysis <RefreshCw size={17}/></button><button className="demo-action" onClick={() => { setError(null); setStage('POSING'); }}>Retake photos</button><button className="demo-action" onClick={reset}>Back to studio</button></div> : <button className="cancel-session" onClick={reset} aria-label="Cancel analysis"><X size={18}/></button>}</>}
-    {stage === 'RESULTS' && result && <StyleResults result={result} onReset={reset} onRetake={() => { sessionIdRef.current = crypto.randomUUID(); reportRequestRef.current = null; setError(null); if (!demo) camera.startCamera(); setStage('POSING'); }} />}
+    {stage === 'ANALYZING' && <div className="analysis-screen" role="status"><button className="icon-button cancel-session" onClick={reset} aria-label="Cancel review"><X size={18}/></button>{error ? <><h2>Review paused</h2><p>{error}</p><button className="primary-action" onClick={() => { analysisRef.current?.abort(); void finish(photos); }}>Retry review</button><button className="text-button" onClick={reset}>Back to camera</button></> : <><span className="loading-ring"/><h2>Reviewing your look</h2><p>One outfit. Two perspectives.</p></>}</div>}
   </div></PhoneFrame>;
 }
-
 export default App;

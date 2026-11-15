@@ -1,6 +1,6 @@
 # Fit Check — DevFest 2026
 
-A camera-first style studio: a 15-second runway with AI audience reactions, a one- or two-photo shoot, and a personal outfit report. The frontend and Gemini backend run together in **one Next.js application**.
+A camera-first style studio: a 15-second runway with outfit-aware comments, an automatic three-photo shoot, and a personal looks feed with blended AI and rules-based scores. The frontend and Gemini backend run together in **one Next.js application**.
 
 ## Run locally
 
@@ -17,15 +17,17 @@ On PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if executio
 
 Run only one development server for this checkout. The studio's opening screen shows the client revision and active server model. `/api/health` also exposes `revision`, `model`, and `aiConfigured` without credentials or a paid AI call. After pulling changes, stop the previous server, restart `npm run dev`, and hard-refresh the browser. Compare the displayed revision with `git rev-parse --short=7 HEAD`. A production `npm start` needs a fresh `npm run build` after pulling.
 
+`npm run dev` explicitly uses port 3000 and fails if that port is occupied instead of silently opening another server on 3001. Development output lives in `.next-dev`; production build/start use `.next`. This keeps their generated manifests separate. Avoid starting a second dev server for the same checkout, even on a different port.
+
 **No key?** Choose **Try the demo** for sample reactions and reports with no AI requests. Real sessions require a configured key for Gemini to see and discuss the outfit. If it is missing or unavailable, the app explains the problem; it never replaces outfit feedback with canned hype. Camera permission is requested only when you choose Enable camera.
 
 ## The experience
 
-1. Enable a camera or explore the demo. Mirror and front/back camera controls help frame the outfit; on-device MediaPipe detection supplies optional framing guidance. Partial outfits, upper-body views, and garment details work. Start never waits for person detection, full-body framing, or an AI configuration check.
+1. Enable a camera or explore the demo. The camera is centered with mirror, camera-switch, and sound controls. Partial outfits, upper-body views, and garment details work. Start never waits for person detection, full-body framing, or an AI configuration check.
 2. Start the three-second countdown, stand in front of the camera, and show off naturally. The app records silent 2½-second clips while Gemini analyzes the latest rolling five-second window. It remembers pieces as you turn or reveal details, so a top, bottoms, shoes, and accessories can be recognized at different moments. Newly revealed pieces get comments before repeated feedback on familiar ones. The 15-second runway starts when clothing is first recognized, then keeps moving through poses and brief gaps; there is no full-body framing gate. Real comments are specific compliments marked **Works well** or constructive changes marked **Try this**. A whole window without a wearer stops new comments. Viewers and audience identities are simulated.
-3. Capture one or two photos, immediately or using the three-second timer.
-4. Generate a personal report: style score, archetype, visible garments, constructive styling notes, and AI crowd highlights. The first photo is analyzed; both photos remain available to save.
-5. Edit or copy the caption, save a photo, retake photos, or start again. Sharing invokes the browser share menu (or copies the caption). Nothing posts to Instagram or another social network.
+3. After the runway, pose for three automatic photos. Each has a pose cue and a full 3–2–1 countdown; there is no manual shutter or photo-mode selection. Three additional snapshots are sampled during the runway using the existing camera capture function.
+4. A single final review sends up to three photos: two runway samples and the last posed photo. Gemini estimates the visible garments and their scoring features, and supplies an independent holistic AI score. The supplied `evaluateOutfit` function computes fit/drape, 7–8 points, hierarchy, continuity, and the fit gate. Final score = (AI score + rules score × 100) / 2, rounded to one decimal. Rules use AI-estimated features, so they are not an independent visual measurement; partial views score only visible pieces.
+5. `/feed` shows all saved looks, every captured photo, AI/rules/final scores, and an expandable breakdown. Browse photos, download them, delete a look, or start another. Photos and reports are saved in this browser's IndexedDB; nothing posts to a social network or uploads to an app database. Clearing browser site data removes saved looks. Demo scores use clearly labeled sample features.
 
 Camera failures, missing configuration, provider errors, unclear photos, and cancellation have recovery paths. A failed real analysis never silently becomes a mock score.
 
@@ -35,7 +37,7 @@ Camera failures, missing configuration, provider errors, unclear photos, and can
 - `GEMINI_MODEL`: defaults to `gemini-3.1-flash-lite` for both live video feedback and the final photo report. It supports video, images, and structured output; availability and quota depend on your key. `node scripts/list-models.mjs` lists accessible models. Quota exhaustion pauses live capture/analysis and shows the actual issue; it is never presented as an inability to see clothing.
 - `GEMINI_THINKING`: `minimal`, `low`, `medium`, `high`, or `off`. Defaults to `low`; use `off` if your chosen model rejects thinking configuration.
 
-Only outfit styling is rated. Short silent clips and the selected results photo are sent to Google Gemini during an explicitly started real session. Clips stay in a bounded in-memory buffer and are discarded as newer clips arrive; no audio is captured. Browsers without supported video recording send a short timestamped sequence of camera frames instead. This app does not persist clips, photos, comments, or reports to a database. Session data stays in browser memory until reset or reload; saved downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
+Only outfit styling is rated. Short silent clips and up to three selected snapshots are sent to Google Gemini during an explicitly started real session. Clips stay in a bounded in-memory buffer and are discarded as newer clips arrive; no audio is captured. Browsers without supported video recording send a short timestamped sequence of camera frames instead. Completed photos and reports persist locally in IndexedDB for the looks feed, not on the app server. Downloads are controlled by the user. Google's processing and retention depend on your Gemini service terms.
 
 ## Request budgets and cooldowns
 

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { execFileSync } from 'node:child_process';
+import { PHASE_DEVELOPMENT_SERVER } from 'next/constants';
 
 function revision() {
   const supplied = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA;
@@ -23,4 +24,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default function config(phase: string): NextConfig {
+  // Next 15 shares .next between dev and build by default. Keep their manifests
+  // separate so a production build cannot invalidate a running development server.
+  return { ...nextConfig, distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next' };
+}
