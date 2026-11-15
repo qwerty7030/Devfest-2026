@@ -37,7 +37,7 @@ test('the comments route sends the actual camera JPEG and asks Gemini for observ
   } finally { globalThis.fetch = original; if (key === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = key; }
 });
 
-test('the live endpoint sends short videos plus outfit memory and coverage context to Gemini', async () => {
+test('the live endpoint sends inline MP4 at two FPS with the outfit prompt after the video', async () => {
   const key = process.env.GEMINI_API_KEY; const original = globalThis.fetch;
   process.env.GEMINI_API_KEY = 'unit-test-key'; let sent = '';
   globalThis.fetch = async (_url, init) => {
@@ -45,14 +45,18 @@ test('the live endpoint sends short videos plus outfit memory and coverage conte
     return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ person_visible: true, observations: [observation], comments: [praise, critique] }) }] } }] });
   };
   try {
-    const data = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0]).toString('base64');
+    const data = Buffer.from([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]).toString('base64');
     const result = await POST(new Request('http://localhost/api/comments', { method: 'POST', body: JSON.stringify({
-      clips: [{ video: { data, mimeType: 'video/webm' }, durationMs: 2500 }],
+      clips: [{ video: { data, mimeType: 'video/mp4' }, durationMs: 2500 }],
       sessionId: crypto.randomUUID(), requestId: crypto.randomUUID(),
       knownItems: [observation], coveredParts: [{ id: 'tee', comments: 2 }], recent: [praise.text],
     }) }));
     assert.equal(result.status, 200);
-    assert.match(sent, /video\/webm/); assert.match(sent, /Navy T-shirt/); assert.match(sent, /Comment coverage so far/);
+    const parts = JSON.parse(sent).contents[0].parts;
+    assert.deepEqual(parts[1].inlineData, { data, mimeType: 'video/mp4' });
+    assert.equal(parts[1].videoMetadata.fps, 2);
+    assert.match(parts.at(-1).text, /Watch this short outfit clip/);
+    assert.match(sent, /Navy T-shirt/); assert.match(sent, /Comment coverage so far/);
     assert.match(sent, /across the whole clip/); assert.match(sent, /do not repeat or paraphrase/);
   } finally { globalThis.fetch = original; if (key === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = key; }
 });

@@ -3,6 +3,9 @@ import type { OutfitObservation } from './types';
 import { ApiError, jpegFrame } from './validation';
 
 export const MAX_CLIP_BODY_BYTES = 12_000_000;
+// Short outfit turns can reveal a cuff or shoe between the default 1 FPS samples.
+// Use Google's custom video sampling without making a request per frame.
+export const OUTFIT_VIDEO_FPS = 2;
 
 /** Validate video container signatures and bounded sequences, not just claimed MIME types. */
 export function clipParts(body: Record<string, unknown> | null): Part[] {
@@ -23,7 +26,7 @@ export function clipParts(body: Record<string, unknown> | null): Part[] {
       const webm = video.mimeType === 'video/webm' && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
       const mp4 = video.mimeType === 'video/mp4' && bytes.subarray(4, 8).toString() === 'ftyp';
       if (bytes.length > 4_000_000 || (!webm && !mp4)) throw new ApiError('The clip must be a valid WebM or MP4 video.');
-      return [{ inlineData: { mimeType: video.mimeType as string, data: video.data }, videoMetadata: { fps: 1 } }];
+      return [{ inlineData: { mimeType: video.mimeType as string, data: video.data }, videoMetadata: { fps: OUTFIT_VIDEO_FPS } }];
     }
     if (!Array.isArray(clip.frames) || clip.frames.length < 2 || clip.frames.length > 6) throw new ApiError('Send 2–6 ordered frames from your outfit clip.');
     let previous = -1;

@@ -37,6 +37,8 @@ Only outfit styling is rated. Short silent clips and the selected results photo 
 
 ## Request budgets and cooldowns
 
+Video input follows [Google's video-understanding guide](https://aistudio.google.com/docs/video-understanding?generate-content=true): short clips are sent inline using `generateContent`, with `videoMetadata.fps: 2` and the outfit prompt after the media. Sampling twice per second gives brief outfit details more chances to be seen than the default one FPS. Each rolling window is still one model request, not one request per sampled frame. This increases visual input tokens, while the existing duration and request limits keep usage bounded. Static video processing suits these short clips; agentic navigation and Files API uploads are unnecessary for this flow.
+
 An ordinary fit check can make at most **two live Gemini attempts, at least ten seconds apart, and one final report attempt**. Comments from those batches are paced locally; each displayed comment does not make a model call. Collection stops after two checks or 30 seconds even if no outfit is recognized. Hidden tabs do not start new live requests. Explicit retakes start a new manual analysis session and still obey the shared limits.
 
 Both endpoints enforce a shared ceiling of **four provider calls per rolling minute** and **100 per Pacific calendar day**, with one provider call in flight. Configure `GEMINI_APP_REQUESTS_PER_MINUTE` and `GEMINI_APP_REQUESTS_PER_DAY` at or below the actual Google project limits, then restart. Google also applies token limits and counts usage from other apps in the same project, which this app cannot measure.
