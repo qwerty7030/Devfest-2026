@@ -37,6 +37,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState('Connecting your AI audience…');
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [activeModel, setActiveModel] = useState<string>('Checking AI connection…');
   const [showGuide, setShowGuide] = useState(false);
   const [observations, setObservations] = useState<OutfitObservation[]>([]);
   const camera = useCamera();
@@ -50,7 +51,10 @@ export function App() {
   useEffect(() => { soundEffects.setMuted(muted); }, [muted]);
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch('/api/health', { signal: ctrl.signal }).then(r => r.json()).then(d => setConfigured(d.aiConfigured)).catch(() => {});
+    fetch('/api/health', { signal: ctrl.signal, cache: 'no-store' }).then(r => r.json()).then(d => {
+      setConfigured(d.aiConfigured);
+      setActiveModel(typeof d.model === 'string' ? d.model : 'Restart server to load the current version');
+    }).catch(() => { if (!ctrl.signal.aborted) setActiveModel('AI server unavailable'); });
     return () => ctrl.abort();
   }, []);
   useEffect(() => () => analysisRef.current?.abort(), []);
@@ -128,6 +132,7 @@ export function App() {
         {camera.isCameraActive && !demo && <button className="demo-action" aria-pressed={showGuide} onClick={() => setShowGuide(v => !v)}>{showGuide ? 'Hide optional framing guide' : 'Show optional framing guide'}</button>}
         <button className="demo-action" onClick={camera.toggleTestMode}><Sparkles size={14}/>{demo ? 'Back to my camera' : 'Just looking? Try the demo'}</button>
         <p className="privacy-note">{demo ? 'Sample outfit, sample score. Your real fit is next.' : 'Short camera clips go to Google Gemini during your session. We don’t store them.'}</p>
+        <p className="privacy-note" aria-label="App version and AI model">Version {process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p>
       </div>
     </>}
     {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}

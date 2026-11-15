@@ -15,6 +15,8 @@ npm run dev
 
 On PowerShell, use `Copy-Item .env.example .env.local` and `npm.cmd` if execution policy blocks `npm`. Open http://localhost:3000.
 
+Run only one development server for this checkout. The studio's opening screen shows the client revision and active server model. `/api/health` also exposes `revision`, `model`, and `aiConfigured` without credentials or a paid AI call. After pulling changes, stop the previous server, restart `npm run dev`, and hard-refresh the browser. Compare the displayed revision with `git rev-parse --short=7 HEAD`. A production `npm start` needs a fresh `npm run build` after pulling.
+
 **No key?** Choose **Try the demo** for sample reactions and reports with no AI requests. Real sessions require a configured key for Gemini to see and discuss the outfit. If it is missing or unavailable, the app explains the problem; it never replaces outfit feedback with canned hype. Camera permission is requested only when you choose Enable camera.
 
 ## The experience
