@@ -67,6 +67,8 @@ Install dependencies at the repository root. `frontend/package.json` only forwar
 
 ## Checks and production
 
+Firebase deployment is configured for project `devfest2026-41803` using App Hosting. See [the deployment steps](docs/FIREBASE.md). This requires the Blaze plan and a runtime Gemini secret; local `.env` files are excluded from source uploads.
+
 ```sh
 npm run lint
 npm run typecheck

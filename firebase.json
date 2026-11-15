@@ -1,0 +1,17 @@
+{
+  "apphosting": [
+    {
+      "backendId": "drip-score",
+      "rootDir": ".",
+      "ignore": [
+        ".git", ".git/**", ".firebase", ".firebase/**",
+        "node_modules", "**/node_modules/**",
+        ".next", ".next/**", ".next-dev", ".next-dev/**",
+        ".env*", "**/.env*", "*.pem", "**/*.pem",
+        "artifacts", "artifacts/**", "data/.runtime", "data/.runtime/**",
+        "firebase-debug.log", "firebase-debug.*.log", "*.tsbuildinfo",
+        "frontend/dist", "frontend/dist/**"
+      ]
+    }
+  ]
+}

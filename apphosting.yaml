@@ -1,0 +1,33 @@
+# Next.js build/start are detected by Firebase's framework adapter.
+runConfig:
+  minInstances: 0
+  maxInstances: 1
+  concurrency: 8
+  cpu: 1
+  memoryMiB: 1024
+
+env:
+  - variable: GEMINI_API_KEY
+    secret: drip-score-gemini-key
+    availability:
+      - RUNTIME
+  - variable: GEMINI_MODEL
+    value: gemini-3.1-flash-lite
+    availability:
+      - RUNTIME
+  - variable: GEMINI_THINKING
+    value: low
+    availability:
+      - RUNTIME
+  - variable: GEMINI_APP_REQUESTS_PER_MINUTE
+    value: "4"
+    availability:
+      - RUNTIME
+  - variable: GEMINI_APP_REQUESTS_PER_DAY
+    value: "100"
+    availability:
+      - RUNTIME
+  - variable: GEMINI_BUDGET_DIRECTORY
+    value: /tmp/drip-score-budget
+    availability:
+      - RUNTIME

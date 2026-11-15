@@ -75,7 +75,7 @@ export function requestBudget() {
   if (!globalBudget.fitcheckBudget) {
     const number = (name: string, fallback: number) => Math.max(0, Number(process.env[name]) || fallback);
     const memory = process.env.GEMINI_BUDGET_STORAGE === 'memory';
-    globalBudget.fitcheckBudget = new RequestBudget(memory ? new MemoryBudgetStore() : new FileBudgetStore(join(process.cwd(), 'data', '.runtime')), {
+    globalBudget.fitcheckBudget = new RequestBudget(memory ? new MemoryBudgetStore() : new FileBudgetStore(process.env.GEMINI_BUDGET_DIRECTORY || join(process.cwd(), 'data', '.runtime')), {
       perMinute: number('GEMINI_APP_REQUESTS_PER_MINUTE', 4), perDay: number('GEMINI_APP_REQUESTS_PER_DAY', 100),
       minGapMs: memory && process.env.NODE_ENV === 'test' ? 0 : 10_000,
     });
