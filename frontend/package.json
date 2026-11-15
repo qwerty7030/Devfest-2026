@@ -1,5 +1,5 @@
 {
-  "name": "fitcheck-ui",
+  "name": "drip-score-ui",
   "private": true,
   "scripts": {
     "dev": "npm --prefix .. run dev",

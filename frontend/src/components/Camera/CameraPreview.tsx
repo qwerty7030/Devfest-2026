@@ -174,7 +174,7 @@ export const CameraPreview: React.FC<CameraPreviewProps> = ({
           </div>
           <h3 className="text-white text-lg font-bold mb-2">Camera Access Needed</h3>
           <p className="text-zinc-400 text-xs sm:text-sm max-w-xs mb-6">
-            {errorMessage || 'Fit Check needs camera access to capture and rate your outfit.'}
+            {errorMessage || 'Drip Score needs camera access to capture and rate your outfit.'}
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
             <button

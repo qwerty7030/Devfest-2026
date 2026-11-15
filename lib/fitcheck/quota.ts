@@ -29,5 +29,5 @@ export function quotaFailure(error: unknown, now = Date.now()): QuotaFailure | n
     : Math.max(60, Math.ceil(Number(delay?.[1] ?? 60)));
   return { code: daily ? 'AI_DAILY_QUOTA_EXHAUSTED' : 'AI_RATE_LIMITED', retryAfterSeconds,
     message: daily ? 'Gemini’s daily project quota is exhausted. Wait for the daily reset; retrying this session cannot fix it.'
-      : `Gemini needs a cooldown. Wait ${retryAfterSeconds} seconds before another fit check.` };
+      : `Gemini needs a cooldown. Wait ${retryAfterSeconds} seconds before another drip score.` };
 }

@@ -100,7 +100,7 @@ export function App() {
       {!camera.isCameraActive && camera.hasPermission !== false && <div className="camera-welcome"><Camera size={30} strokeWidth={1}/><h1>Show your fit.</h1></div>}
       <div className="studio-controls">
         {configured === false && !demo && <p className="service-note">AI is not configured.</p>}
-        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>{camera.isCameraActive ? 'Start fit check' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</button>
+        <button className="primary-action" disabled={camera.isStarting && !camera.isCameraActive} onClick={camera.isCameraActive ? begin : camera.startCamera}>{camera.isCameraActive ? 'Start drip score' : camera.isStarting ? 'Connecting…' : 'Enable camera'}</button>
         <button className="text-button demo-action" onClick={camera.toggleTestMode}>{demo ? 'Use my camera' : 'Try demo'}</button>
         <p className="privacy-note">{demo ? 'Sample session · no API calls' : 'Clips go to Gemini. Photos save to this browser.'}</p>
         <details className="version-info"><summary>Connection</summary><p>{process.env.NEXT_PUBLIC_APP_REVISION ?? 'local'} · {activeModel}</p></details>
@@ -108,7 +108,7 @@ export function App() {
     </>}
     {stage === 'COUNTDOWN' && <><CountdownOverlay onComplete={countdownFinished}/><button className="icon-button cancel-session" onClick={reset} aria-label="Cancel countdown"><X size={18}/></button></>}
     {stage === 'RECORDING' && <>
-      <div className="live-toolbar"><span><i/>Live</span><span>{DURATION - elapsed}s</span><button className="icon-button" onClick={reset} aria-label="Stop fit check"><X size={18}/></button></div>
+      <div className="live-toolbar"><span><i/>Live</span><span>{DURATION - elapsed}s</span><button className="icon-button" onClick={reset} aria-label="Stop drip score"><X size={18}/></button></div>
       <div className="runway-progress"><div style={{ width: `${elapsed / DURATION * 100}%` }}/></div>
       <div className="audience-status" role="status">{status}</div>
       <p className="pose-cue">{elapsed < 4 ? 'Show your outfit' : elapsed < 8 ? 'Try a turn' : elapsed < 12 ? 'Show the details' : 'Photos up next'}</p>

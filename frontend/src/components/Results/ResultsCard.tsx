@@ -36,11 +36,11 @@ export const ResultsCard: React.FC<ResultsCardProps> = ({
   }, []);
 
   const handleShare = async () => {
-    const text = `🔥 Fit Check Score: ${result.overallScore}/100!\nStyle Archetype: ${result.archetype}\nRated on Fit Check AI at DevFest 2026.`;
+    const text = `🔥 Drip Score Score: ${result.overallScore}/100!\nStyle Archetype: ${result.archetype}\nRated on Drip Score AI at DevFest 2026.`;
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'My Fit Check',
+          title: 'My Drip Score',
           text,
         });
         return;
@@ -69,7 +69,7 @@ export const ResultsCard: React.FC<ResultsCardProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-pink-400 font-mono text-xs font-bold uppercase tracking-wider">
             <Sparkles className="w-4 h-4" />
-            <span>Fit Check Complete</span>
+            <span>Drip Score Complete</span>
           </div>
 
           <button

@@ -75,10 +75,10 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
   };
 
   const handleShare = async () => {
-    const text = `Check out my Fit Check post! Scored ${result.overallScore}/100 (${result.archetype}) on Fit Check AI at DevFest 2026.`;
+    const text = `Check out my Drip Score post! Scored ${result.overallScore}/100 (${result.archetype}) on Drip Score AI at DevFest 2026.`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'My Fit Check Post', text });
+        await navigator.share({ title: 'My Drip Score Post', text });
         return;
       } catch {
         // Fallback to clipboard
@@ -93,7 +93,7 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
     const activePhoto = photos[currentPhotoIdx];
     const a = document.createElement('a');
     a.href = activePhoto;
-    a.download = `fitcheck-post-${Date.now()}.jpg`;
+    a.download = `drip-score-post-${Date.now()}.jpg`;
     a.click();
   };
 
@@ -162,7 +162,7 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
                   </span>
                 </div>
                 <span className="text-[10px] text-zinc-400">
-                  DevFest 2026 • Live Fit Check
+                  DevFest 2026 • Live Drip Score
                 </span>
               </div>
             </div>
@@ -179,7 +179,7 @@ export const InstagramPostCard: React.FC<InstagramPostCardProps> = ({
           >
             <img
               src={photos[currentPhotoIdx]}
-              alt={`Fit Check Pose ${currentPhotoIdx + 1}`}
+              alt={`Drip Score Pose ${currentPhotoIdx + 1}`}
               className="w-full h-full object-cover object-center"
             />
 
